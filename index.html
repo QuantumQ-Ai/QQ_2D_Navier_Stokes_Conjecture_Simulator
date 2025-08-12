@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Fluid Dynamics Analogue Simulator v44</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN for plotting -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <!-- MathJax Configuration -->
+    <script>
+        MathJax = {
+          tex: {
+            inlineMath: [['$', '$'], ['\\(', '\\)']]
+          },
+          svg: {
+            fontCache: 'global'
+          },
+          options: {
+            skipHtmlTags: ['script', 'noscript', 'textarea', 'pre', 'code', 'annotation', 'annotation-xml'],
+            ignoreHtmlClass: 'no-mathjax'
+          }
+        };
+    </script>
+    <!-- MathJax CDN for LaTeX rendering -->
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        /* Custom styles for better slider appearance */
+        input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #4F46E5; cursor: pointer; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.3); margin-top: -6px; }
+        input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #4F46E5; cursor: pointer; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.3); }
+        input[type='range'] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 2px; outline: none; background: linear-gradient(to right, hsl(120, 60%, 85%) 0%, hsl(210, 70%, 75%) 33%, hsl(270, 80%, 65%) 66%, hsl(0, 90%, 55%) 100%); background-size: var(--slider-value-percent, 0%) 100%; background-repeat: no-repeat; background-color: #E0E7FF; transition: background-size 0.1s ease-out; }
+        input[type='range']::-webkit-slider-runnable-track { background: transparent; }
+        input[type='range']::-moz-range-track { background: transparent; }
+        select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); justify-content: center; align-items: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); position: relative; max-width: 90%; max-height: 90%; overflow-y: auto; animation: fadeIn 0.3s ease-out; }
+        .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; position: absolute; top: 10px; right: 20px; }
+        .close-button:hover, .close-button:focus { color: black; text-decoration: none; cursor: pointer; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #fff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulseColor { 0% { color: white; } 50% { color: #FECACA; } 100% { color: white; } }
+        .pulsing-text { animation: pulseColor 1s ease-in-out infinite; }
+        #simulationActivityIndicator { display: none; position: absolute; top: 1.5rem; right: 1.5rem; z-index: 10; display: flex; align-items: center; gap: 0.5rem; }
+        .spinner.spinner-completed { animation: none; border-top-color: #10B981 !important; border-left-color: #10B981 !important; border-right-color: #10B981 !important; border-bottom-color: #10B981 !important; }
+        .progress-bar-container { position: relative; width: 100%; height: 0.625rem; background-color: #E0E7FF; border-radius: 9999px; margin-bottom: 1rem; overflow: hidden; }
+        #progressBar { position: absolute; left: 0; top: 0; height: 100%; border-radius: 9999px; background-color: #4F46E5; transition: width 0.1s ease-out; }
+        #dynamicTooltip { position: absolute; background-color: rgba(31, 41, 55, 0.95); color: white; padding: 0.5rem 0.75rem; border-radius: 0.375rem; font-size: 0.75rem; line-height: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); white-space: normal; max-width: 250px; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-in-out; top: -9999px; left: -9999px; }
+        #dynamicTooltip.show { opacity: 1; }
+        .tooltip-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; align-items: center; }
+        .tooltip-grid-label { font-weight: 600; text-align: right; }
+        #livePlotCanvas { width: 100%; height: 100%; background-color: #f0f0f0; border-radius: 0.5rem; image-rendering: pixelated; }
+        .color-legend-container { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 1rem; padding: 0.5rem 0; font-size: 0.875rem; color: #374151; }
+        .color-gradient { flex-grow: 1; height: 16px; border-radius: 8px; margin: 0 0.5rem; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
+        .legend-label { white-space: nowrap; font-weight: 500; }
+        .text-green-600-custom { color: #16A34A; }
+        .playback-disabled { opacity: 0.5; pointer-events: none; }
+        .tab-button.active-tab { color: #4f46e5; border-bottom-width: 2px; border-color: #4f46e5; }
+        .tab-button.inactive-tab { color: #6b7280; border-bottom-width: 2px; border-color: transparent; }
+        .tab-button.inactive-tab:hover { color: #374151; border-color: #d1d5db; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Vector Field Grid styles */
+        #fieldGridContainer {
+            display: grid;
+            grid-template-columns: repeat(var(--field-grid-n, 128), 1fr);
+            grid-template-rows: repeat(var(--field-grid-n, 128), 1fr);
+            width: 400px;
+            height: 400px;
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-radius: 0.375rem;
+            background-color: #f9fafb; /* gray-50 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-right: none;
+            border-bottom: none;
+            cursor: pointer;
+        }
+        .field-grid-cell {
+            position: relative;
+            overflow: hidden;
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            transition: background-color 0.4s ease-out;
+        }
+        .field-grid-cell:nth-child(var(--field-grid-n)n) { border-right: none; }
+        .field-grid-cell:nth-last-child(-n+var(--field-grid-n)) { border-bottom: none; }
+        .field-grid-cell-highlight {
+             background-color: rgba(255, 255, 255, 0.6) !important;
+             transition: background-color 0.05s ease-in;
+        }
+        .field-grid-cell-selected {
+            outline: 3px solid #4338CA; /* Indigo 700 */
+            outline-offset: -3px;
+            z-index: 10;
+        }
+        .field-grid-cell-multiselected::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 2px solid #111827;
+            border-radius: 50%;
+            box-shadow: 0 0 3px 1px rgba(0, 0, 0, 0.4);
+            z-index: 5;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-50 font-sans antialiased text-gray-800 p-4 sm:p-6">
+
+    <div class="max-w-7xl mx-auto">
+        <div class="text-center mb-4">
+            <h1 class="font-bold tracking-widest text-gray-600" style="font-size: 10pt;"><span style="color: #FF0000;">Q</span> <span style="color: #0000FF;">U</span> A N T U M &nbsp; Q &nbsp; | &nbsp; R E S E A R C H &nbsp;&nbsp; &amp; &nbsp;&nbsp; D E V E L O P M E N T &nbsp;&nbsp; D I V I S I O N &nbsp; | &nbsp; 2 0 2 5 &copy;</h1>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto bg-white shadow-lg rounded-xl p-6 sm:p-8 border border-gray-200" id="mainContentArea">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-center text-indigo-700 mb-2">2D Fluid Dynamics Analogue Simulator</h1>
+        <p class="text-center text-sm text-gray-700 font-semibold mb-8 tracking-wider">A CONCEPTUAL 2D INCOMPRESSIBLE FLUID DYNAMICS MODEL</p>
+
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative mb-8 text-left" role="alert">
+            <strong class="font-bold">CRITICAL NOTE FOR RESEARCHERS:</strong>
+            <span class="block sm:inline">This simulator provides a **conceptual visualization** of 2D incompressible fluid dynamics. It is **NOT** a direct, high-fidelity simulation of the 2D Navier-Stokes equations and cannot be used to prove or disprove formal mathematical conjectures. Its purpose is for the conceptual understanding of 2D phenomena like vortex dynamics and turbulence.</span>
+            <br><br><strong>BETA SOFTWARE NOTICE:</strong> This application is under active development. While we strive for accuracy and stability, bugs or unexpected behaviors may be present. Your use of this tool acknowledges this experimental status.
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Left Panel: Parameters and Controls -->
+            <div class="lg:w-2/5 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-md" id="parameterSection">
+                <h2 class="text-2xl font-bold text-gray-700 mb-6">Simulation Parameters</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-4 mb-8">
+                    <!-- Grid Resolution -->
+                    <div>
+                        <label for="paramN" class="block text-sm font-medium text-gray-600 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Grid Resolution (N)</p><p class='text-xs mb-2 text-gray-300'>The number of discrete points along each axis (NxN). Higher N provides higher spatial resolution but is computationally intensive.</p><p class='font-mono text-center bg-gray-900 rounded p-1 text-sm'>Total cells = $N^2$</p></div>">Grid Resolution (N):</label>
+                        <div class="flex items-center gap-x-3 mt-1">
+                            <input type="range" id="paramN" min="32" max="256" step="32" value="128" class="w-full">
+                            <input type="number" id="inputN" min="32" max="256" step="32" value="128" class="bg-white p-1 border border-gray-300 rounded-md shadow-sm text-sm text-center" style="width: 5rem;">
+                        </div>
+                    </div>
+                    <!-- Kinematic Viscosity -->
+                    <div>
+                        <label for="paramViscosity" class="block text-sm font-medium text-gray-600 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Kinematic Viscosity ($\nu$)</p><p class='text-xs mb-2 text-gray-300'>Controls fluid friction and energy dissipation. Higher $\nu$ leads to smoother, more stable flows.</p><p class='font-mono text-center bg-gray-900 rounded p-1 text-sm'>Term: $\nu \nabla^2 \mathbf{u}$</p></div>">Kinematic Viscosity ($\nu$):</label>
+                        <div class="flex items-center gap-x-3 mt-1">
+                            <input type="range" id="paramViscosity" min="0.0" max="0.01" step="0.0001" value="0.001" class="w-full">
+                            <input type="number" id="inputViscosity" min="0.0" max="0.01" step="0.0001" value="0.0010" class="bg-white p-1 border border-gray-300 rounded-md shadow-sm text-sm text-center" style="width: 5rem;">
+                        </div>
+                    </div>
+                    <!-- Time Step -->
+                    <div>
+                        <label for="paramDt" class="block text-sm font-medium text-gray-600 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Time Step ($\Delta t$)</p><p class='text-xs mb-2 text-gray-300'>The duration of each simulation step. Smaller values increase accuracy but take longer.</p></div>">Time Step ($\Delta t$):</label>
+                        <div class="flex items-center gap-x-3 mt-1">
+                            <input type="range" id="paramDt" min="0.001" max="0.1" step="0.001" value="0.02" class="w-full">
+                            <input type="number" id="inputDt" min="0.001" max="0.1" step="0.001" value="0.020" class="bg-white p-1 border border-gray-300 rounded-md shadow-sm text-sm text-center" style="width: 5rem;">
+                        </div>
+                    </div>
+                     <!-- Simulation Steps -->
+                    <div>
+                        <label for="paramSimTime" class="block text-sm font-medium text-gray-600 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Simulation Steps</p><p class='text-xs mb-2 text-gray-300'>Total number of time steps to run the simulation for.</p></div>">Simulation Steps:</label>
+                        <div class="flex items-center gap-x-3 mt-1">
+                            <input type="range" id="paramSimTime" min="100" max="2000" step="100" value="500" class="w-full">
+                            <input type="number" id="inputSimTime" min="100" max="2000" step="100" value="500" class="bg-white p-1 border border-gray-300 rounded-md shadow-sm text-sm text-center" style="width: 5rem;">
+                        </div>
+                    </div>
+                    <!-- Initial Condition -->
+                    <div class="col-span-full flex flex-col">
+                        <label for="paramInitCondition" class="text-sm font-medium text-gray-600 mb-1 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Initial Condition</p><p class='text-xs text-gray-300'>The starting state of the fluid at time $t=0$.</p></div>">Initial Condition:</label>
+                        <select id="paramInitCondition" class="bg-white block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-base h-10">
+                            <option value="shear">Shear Flow (Kelvin-Helmholtz)</option>
+                            <option value="vortex_pair">Vortex Pair</option>
+                            <option value="jet">Central Jet</option>
+                            <option value="random">Random Noise</option>
+                        </select>
+                    </div>
+                    <!-- Visualization Mode -->
+                    <div class="col-span-full flex flex-col">
+                        <label for="paramVisualization" class="text-sm font-medium text-gray-600 mb-1 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Visualization Mode</p><p class='text-xs text-gray-300'>Selects which physical quantity to display in the 2D view.</p></div>">Visualization Mode:</label>
+                        <select id="paramVisualization" class="bg-white block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-base h-10">
+                            <option value="vorticity">Vorticity</option>
+                            <option value="density">Density (Passive Scalar)</option>
+                            <option value="pressure">Pressure</option>
+                        </select>
+                    </div>
+                    <!-- Enable Tooltips Checkbox -->
+                    <div class="col-span-full flex items-center mt-4">
+                        <input type="checkbox" id="enableTooltips" class="form-checkbox h-4 w-4 text-indigo-600 transition duration-150 ease-in-out rounded-md cursor-pointer">
+                        <label for="enableTooltips" class="ml-2 text-sm font-medium text-gray-700 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Enable Tooltips</p><p class='text-xs text-gray-300'>Toggle dashboard-wide tooltips for mathematical equations and important labels.</p></div>">Enable Equation Tooltips</label>
+                    </div>
+                </div>
+
+                <!-- Simulation Presets -->
+                <div class="mt-6">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Simulation Presets:</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button id="presetKelvinHelmholtz" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Preset: Kelvin-Helmholtz</p><p class='text-xs text-gray-300'>Demonstrates the classic K-H instability arising from a shear layer, leading to roll-up vortices.</p></div>">Kelvin-Helmholtz</button>
+                        <button id="presetVortexMerging" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Preset: Vortex Merging</p><p class='text-xs text-gray-300'>Shows how two co-rotating vortices interact and eventually merge into a single larger vortex.</p></div>">Vortex Merging</button>
+                        <button id="presetLaminar" class="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Preset: Laminar Flow</p><p class='text-xs text-gray-300'>A high-viscosity scenario where a central jet diffuses smoothly without forming complex structures.</p></div>">Laminar Flow</button>
+                        <button id="presetTurbulent" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Preset: Turbulent Decay</p><p class='text-xs text-gray-300'>Starts with random noise in a low-viscosity fluid, leading to the formation and interaction of many vortices, characteristic of 2D turbulence.</p></div>">Turbulent Decay</button>
+                    </div>
+                </div>
+
+                <!-- Simulation Controls -->
+                <h3 class="text-lg font-semibold text-gray-700 mt-6 mb-3">Simulation Controls:</h3>
+                <div class="flex flex-col sm:flex-row justify-around gap-4 mb-4">
+                    <button id="btnRun" class="flex-1 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" title="Start Simulation">
+                        <span id="btnRunContent" class="flex items-center justify-center"><svg class="inline-block w-5 h-5 mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197 2.132A1 1 0 0110 13.82V9.18a1 1 0 011.555-.832l3.197 2.132a1 1 0 010 1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Simulation</span>
+                    </button>
+                    <button id="btnPauseResume" class="flex-1 px-4 py-2 bg-yellow-500 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition ease-in-out duration-150 opacity-50 cursor-not-allowed h-10" disabled title="Pause Simulation">
+                        <svg class="inline-block w-5 h-5 mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Pause
+                    </button>
+                </div>
+                <div class="flex flex-col sm:flex-row justify-around gap-4">
+                    <button id="btnRefresh" class="flex-1 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" title="Refresh Dashboard"><svg class="inline-block w-5 h-5 mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004 12c0 2.21.817 4.231 2.105 5.786M20 20v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>Refresh</button>
+                    <button id="btnExport" class="flex-1 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 opacity-50 cursor-not-allowed h-10" disabled title="Export Data"><svg class="inline-block w-5 h-5 mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>Export Data</button>
+                </div>
+                <div class="flex justify-around gap-4 mt-4">
+                    <button id="btnHelp" class="flex-1 px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 flex items-center justify-center cursor-pointer" title="How to Interpret the Dashboard">How to Interpret this Dashboard</button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Visualization -->
+            <div class="lg:w-3/5 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-md relative">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-700">Live Simulation <span id="liveSimSubtitle" class="ml-2 text-base font-semibold"></span></h2>
+                    <div id="simulationActivityIndicator" class="hidden"><span id="percentageCounter" class="text-sm font-semibold text-gray-700">0%</span><span class="spinner w-8 h-8 !border-t-green-500 !border-gray-300"></span></div>
+                </div>
+                <div class="progress-bar-container"><div id="progressBar" style="width: 0%;"></div></div>
+                <div class="color-legend-container"><span id="legendLabelMin" class="legend-label left">Low</span><div id="color-gradient" class="color-gradient"></div><span id="legendLabelMax" class="legend-label right">High</span></div>
+                <div class="relative bg-white rounded-lg shadow-inner border border-gray-300 aspect-square"><canvas id="livePlotCanvas"></canvas></div>
+                <div id="playbackControls" class="mt-4 bg-white rounded-lg p-4 shadow-inner border border-gray-300 playback-disabled">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Simulation Playback</h3>
+                    <div class="flex items-center gap-2">
+                        <input type="range" id="playbackSlider" min="0" max="1" step="1" value="0" class="w-full" disabled>
+                        <button id="btnReplay" class="flex-shrink-0 p-1.5 bg-gray-200 hover:bg-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Play/Pause Replay">
+                            <svg id="replayPlayIcon" class="w-4 h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.204 2.102l-.693.693a6.5 6.5 0 0010.99-2.495l-1.093-.3ZM4.688 8.576a5.5 5.5 0 019.204-2.102l.693-.693a6.5 6.5 0 00-10.99 2.495l1.093.3Z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M5.53 4.843a.75.75 0 011.054.08l1.497 1.684a.75.75 0 11-1.134.996L5.45 5.925a.75.75 0 01.08-1.082Zm9.94 9.227a.75.75 0 01-1.054-.08l-1.497-1.684a.75.75 0 111.134-.996l1.496 1.684a.75.75 0 01-.08 1.082Z" clip-rule="evenodd"/></svg>
+                            <svg id="replayPauseIcon" class="w-4 h-4 text-gray-700 hidden" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 4.75A.75.75 0 015.75 4h2.5A.75.75 0 019 4.75v10.5A.75.75 0 018.25 16h-2.5A.75.75 0 015 15.25V4.75zm6.5.75A.75.75 0 0010.75 4h2.5a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75h-2.5a.75.75 0 01-.75-.75V5.5z" clip-rule="evenodd"></path></svg>
+                        </button>
+                    </div>
+                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                        <span id="playbackCurrentTime">Step: 0</span><span id="playbackTotalTime">Total: 0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simulation Metrics Section -->
+        <div class="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-md">
+            <h2 class="text-2xl font-bold text-gray-700 mb-6">Simulation Metrics</h2>
+            <div id="metricsContent" class="p-4 bg-white rounded-b-lg shadow-inner border border-gray-300">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
+                    <div><h3 class="font-semibold text-gray-700 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Kinetic Energy ($E_k$)</p><p class='text-xs mb-2 text-gray-300'>The total energy of motion in the fluid. Tends to decay over time due to viscosity.</p><p class='font-mono text-center bg-gray-900 rounded p-1 text-sm'>$E_k = \frac{1}{2} \int |\mathbf{u}|^2 dA$</p></div>">Kinetic Energy ($E_k$):</h3><p class="text-gray-600">Current: <span id="metricKE_current" class="font-mono">0.0000</span></p><p class="text-gray-600">Max Overall: <span id="metricKE_max" class="font-mono">0.0000</span></p></div>
+                    <div><h3 class="font-semibold text-gray-700 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Enstrophy ($\mathcal{E}$)</p><p class='text-xs mb-2 text-gray-300'>The intensity of vorticity (swirling motion). In 2D, enstrophy cascades to small scales and is dissipated by viscosity.</p><p class='font-mono text-center bg-gray-900 rounded p-1 text-sm'>$\mathcal{E} = \frac{1}{2} \int \omega_z^2 dA$</p></div>">Enstrophy ($\mathcal{E}$):</h3><p class="text-gray-600">Current: <span id="metricEnstrophy_current" class="font-mono">0.0000</span></p><p class="text-gray-600">Max Overall: <span id="metricEnstrophy_max" class="font-mono">0.0000</span></p></div>
+                    <div><h3 class="font-semibold text-gray-700 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Max Velocity ($|\mathbf{u}|_{max}$)</p><p class='text-xs mb-2 text-gray-300'>The highest speed found anywhere in the fluid domain at the current time.</p></div>">Max Velocity:</h3><p class="text-gray-600">Current: <span id="metricMaxVel_current" class="font-mono">0.000</span></p><p class="text-gray-600">Max Overall: <span id="metricMaxVel_max" class="font-mono">0.000</span></p></div>
+                    <div><h3 class="font-semibold text-gray-700 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Max Vorticity ($|\omega_z|_{max}$)</p><p class='text-xs mb-2 text-gray-300'>The strongest local rotation in the fluid. A key value for studying vortex dynamics.</p></div>">Max Vorticity:</h3><p class="text-gray-600">Current: <span id="metricMaxVort_current" class="font-mono">0.000</span></p><p class="text-gray-600">Max Overall: <span id="metricMaxVort_max" class="font-mono">0.000</span></p></div>
+                    <div class="col-span-1 md:col-span-1 lg:col-span-2"><h3 class="font-semibold text-gray-700 cursor-pointer" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Average Divergence ($|\nabla \cdot \mathbf{u}|$)</p><p class='text-xs mb-2 text-gray-300'>Measures numerical error in preserving the incompressibility condition. Should be close to zero.</p></div>">Average Divergence:</h3><p class="text-gray-600">Current: <span id="metricAvgDiv_current" class="font-mono">0.0000</span></p></div>
+                </div>
+                <h3 class="font-semibold text-gray-700 mb-2">Time Series Plots:</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="w-full bg-gray-100 rounded-md border border-gray-300 p-2 relative h-64"><canvas id="keChartCanvas" class="w-full"></canvas></div>
+                    <div class="w-full bg-gray-100 rounded-md border border-gray-300 p-2 relative h-64"><canvas id="enstrophyChartCanvas" class="w-full"></canvas></div>
+                </div>
+                <div class="flex flex-col items-center mt-6">
+                    <div class="grid grid-cols-2 gap-4 w-full max-w-md">
+                        <button id="btnResults" class="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" disabled title="Interpret Current Simulation State"><span class="flex items-center justify-center">✨ Results</span></button>
+                        <button id="btnInterpretKids" class="px-6 py-3 bg-blue-400 text-white font-semibold rounded-lg shadow-md hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" disabled title="Ask Einstein for a simple explanation"><span class="flex items-center justify-center">✨ Ask Einstein</span></button>
+                        <button id="btnQA" class="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg shadow-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 transition ease-in-out duration-150 h-10 cursor-pointer" disabled title="Generate Questions & Answers"><span class="flex items-center justify-center">✨ Q&A</span></button>
+                        <button id="btnConversation" class="px-6 py-3 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition ease-in-out duration-150 h-10 flex items-center justify-center cursor-pointer" title="Listen to a conversation about Navier-Stokes">Conversation</button>
+                        <audio id="navierStokesAudio" src="https://quantumq-ai.github.io/QQ_1D_Navier_Stokes_Conjecture_Simulator/NavierStokesConversation.mp3" preload="auto"></audio>
+                    </div>
+                    <div class="mt-4 w-full max-w-md text-center">
+                        <input type="password" id="geminiApiKeyInput" placeholder="Enter Gemini API Key to enable interpretation" class="bg-white w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 text-sm text-center">
+                        <p class="text-xs text-gray-600 mt-2">INTERNET CONNECTION REQUIRED TO USE AI INTEGRATION</p>
+                        <a href="#" id="getApiKeyLink" class="font-bold text-blue-600 hover:text-blue-800 text-xs no-underline mt-2 inline-block cursor-pointer">HOW TO ACQUIRE A GEMINI KEY</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-md">
+            <h2 class="text-2xl font-bold text-gray-700 mb-6">Detailed Analysis</h2>
+            <div class="flex border-b border-gray-200">
+                <button id="tabDistribution" class="tab-button active-tab px-4 py-2 text-sm font-medium focus:outline-none transition duration-150 ease-in-out cursor-pointer" data-tab="distributionContent">Distribution Analysis</button>
+                <button id="tabSpectrum" class="tab-button inactive-tab px-4 py-2 text-sm font-medium focus:outline-none transition duration-150 ease-in-out cursor-pointer" data-tab="spectrumContent">Energy Spectrum</button>
+                <button id="tabVectorFields" class="tab-button inactive-tab px-4 py-2 text-sm font-medium focus:outline-none transition duration-150 ease-in-out cursor-pointer" data-tab="vectorFieldsContent">Vector & Scalar Fields</button>
+            </div>
+            <div id="detailedAnalysisContent" class="p-4 bg-white rounded-b-lg shadow-inner border border-gray-300 min-h-[20rem]">
+                <div id="distributionContent" class="tab-content active">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">State Distribution Plots:</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div class="w-full bg-gray-100 rounded-md border border-gray-300 p-2 relative cursor-pointer h-80" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Velocity Magnitude Distribution</p><p class='text-xs mb-2 text-gray-300'>Shows the distribution of fluid speeds. Reveals if the flow is dominated by high-speed regions or is relatively uniform.</p></div>"><canvas id="velocityDistChartCanvas" class="w-full"></canvas></div>
+                        <div class="w-full bg-gray-100 rounded-md border border-gray-300 p-2 relative cursor-pointer h-80" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Vorticity Distribution</p><p class='text-xs mb-2 text-gray-300'>Shows the distribution of local spin. Turbulent flows have a broad distribution, while laminar flows have a narrow peak near zero.</p></div>"><canvas id="vorticityDistChartCanvas" class="w-full"></canvas></div>
+                        <div class="w-full bg-gray-100 rounded-md border border-gray-300 p-2 relative cursor-pointer h-80" data-tooltip-content="<div class='text-left'><p class='font-semibold mb-1'>Pressure Distribution</p><p class='text-xs mb-2 text-gray-300'>Shows the distribution of pressure, which enforces incompressibility. Gradients in pressure create forces that accelerate the fluid.</p></div>"><canvas id="pressureDistChartCanvas" class="w-full"></canvas></div>
+                    </div>
+                </div>
+                <div id="spectrumContent" class="tab-content">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Kinetic Energy Spectrum</h3>
+                    <p class="text-xs text-gray-600 mb-4">This log-log plot shows how kinetic energy is distributed across different length scales (wavenumbers, k). For 2D turbulence, an inverse energy cascade can lead to a $k^{-5/3}$ slope, while an enstrophy cascade to high k can show a $k^{-3}$ slope.</p>
+                    <div class="w-full bg-gray-100 rounded-md border border-gray-300 p-2 relative h-96"><canvas id="energySpectrumChartCanvas"></canvas></div>
+                </div>
+                <div id="vectorFieldsContent" class="tab-content">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-center bg-gray-100 p-3 rounded-md">
+                        <div>
+                            <label for="fieldVariableSelect" class="block text-sm font-medium text-gray-700 mb-1">Variable</label>
+                            <select id="fieldVariableSelect" class="bg-white block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-base h-10">
+                                <option value="vorticity">Vorticity</option>
+                                <option value="divergence">Divergence</option>
+                            </select>
+                        </div>
+                    </div>
+                     <p id="fieldMultiSelectActiveMessage" class="hidden text-sm font-semibold text-center text-gray-700 bg-gray-100 border border-gray-300 rounded-md py-1 px-3 my-2 mx-auto w-full max-w-[400px] lg:max-w-[824px]">
+                        Multi-Pixel Analysis Active: Single-click to add/remove points, double-click grid to analyze.
+                    </p>
+                    <div class="flex flex-col lg:flex-row justify-center items-start gap-6 mt-4">
+                        <!-- Left Column: Graphical view and its color bar -->
+                        <div class="flex flex-col items-center">
+                            <canvas id="fieldCanvas" width="400" height="400" class="border border-gray-400 rounded-md shadow-lg" style="cursor:pointer; image-rendering: pixelated; width: 400px; height: 400px;"></canvas>
+                            <div class="mt-2 w-full max-w-[400px]">
+                                <canvas id="fieldColorbarCanvas" width="400" height="20" class="w-full h-5 border border-gray-400 rounded-md"></canvas>
+                                <div class="flex justify-between w-full text-xs mt-1">
+                                    <span id="fieldColorbarMin">0.0</span>
+                                    <span id="fieldColorbarMax">1.0</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Right Column: Numerical Slice Grid -->
+                        <div class="flex flex-col items-center">
+                            <div id="fieldGridContainer" class="flex-shrink-0">
+                                <!-- JS will populate this with a grid of divs -->
+                            </div>
+                            <div class="flex justify-between items-center w-full max-w-[400px] mt-2">
+                                <div class="text-sm text-gray-600 flex items-center">
+                                    <span>Value (<span id="fieldValueSymbol">$N/A$</span>):</span>
+                                    <span id="fieldLiveValue" class="font-mono font-bold bg-white border border-gray-300 py-1 px-2 rounded-md ml-2 inline-block min-w-[7em] text-center shadow-sm">N/A</span>
+                                </div>
+                                <div class="flex items-center">
+                                     <input type="checkbox" id="fieldMultiSelectCheckbox" class="form-checkbox h-4 w-4 text-indigo-600 transition duration-150 ease-in-out rounded-md cursor-pointer">
+                                     <label for="fieldMultiSelectCheckbox" class="ml-2 text-sm font-medium text-gray-700 cursor-pointer">Enable Multi-Pixel Analysis</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="analysisPlaceholderWrapper" style="display: none;"><p id="analysisPlaceholder" class="text-gray-500 text-center py-8">Run a simulation to see detailed analysis here.</p></div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="mt-8 text-center text-xs text-gray-600" style="font-size: 9pt;"><p>Q U A N T U M &nbsp; Q &nbsp; P T E &nbsp; L T D<span class="mx-2">//</span>U E N &nbsp; 2 0 2 4 3 3 9 9 2 N<span class="mx-2">//</span><a href="mailto:information@quantumq.net" class="text-blue-800 hover:text-indigo-600 cursor-pointer">✉️ E - M A I L</a><span class="mx-2">//</span><a href="#" id="acknowledgementsLink" class="hover:text-indigo-600 cursor-pointer">ACKNOWLEDGEMENTS</a><span class="mx-2">//</span><a href="#" id="legalLink" class="hover:text-indigo-600 cursor-pointer">LEGAL</a><span class="mx-2">//</span>2 0 2 5 &copy;</p></footer>
+
+    <!-- Modals -->
+    <div id="interpretationModal" class="modal"><div class="modal-content"><span class="close-button">&times;</span><h2 class="text-2xl font-bold text-gray-800 mb-4">How to Interpret this Dashboard</h2><h3 class="text-xl font-semibold text-gray-700 mb-2 mt-4">1. What is this Simulator?</h3><p class="mb-4 text-gray-700">This simulator provides a **conceptual visualization** of **2D incompressible fluid dynamics**. It numerically solves a simplified version of the Navier-Stokes equations, which are fundamental to describing how fluids like air and water move in a 2D plane. The goal is to help you build an intuition for complex fluid phenomena like turbulence, vortex dynamics, and energy dissipation.</p><div class="mt-4 mb-4 text-red-600 font-semibold border border-red-500 p-3 rounded-md"><strong class="underline">CRITICAL NOTE FOR RESEARCHERS:</strong> This tool is for educational and conceptual purposes only. It uses a simplified numerical scheme and is **NOT** a high-fidelity Computational Fluid Dynamics (CFD) tool. It **cannot be used to formally prove or disprove mathematical conjectures** about the Navier-Stokes equations. That is a question of pure mathematics concerning the properties of the continuous equations, not numerical approximations.</div><h3 class="text-xl font-semibold text-gray-700 mb-2 mt-6">2. The Physics & The Math</h3><h4 class="text-lg font-semibold text-gray-600 mb-2 mt-4">The Governing Equations</h4><p class="mb-4 text-gray-700">The core of the simulation is the Navier-Stokes momentum equation for an incompressible fluid in 2D:</p><p class="text-center my-4">$ \frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla)\mathbf{u} = -\nabla p + \nu \nabla^2 \mathbf{u} $</p><ul class="list-disc list-inside ml-4 text-gray-700 space-y-2"><li>$ \mathbf{u}(x,y,t) $ is the 2D fluid velocity vector $(u,v)$.</li><li>$ (\mathbf{u} \cdot \nabla)\mathbf{u} $ (Advection): How the fluid carries itself. This non-linear term is the source of most of the complexity, including turbulence.</li><li>$ -\nabla p $ (Pressure Gradient): How differences in pressure ($p$) create forces that push the fluid.</li><li>$ \nu \nabla^2 \mathbf{u} $ (Viscous Diffusion): Represents fluid friction, where $\nu$ is the kinematic viscosity.</li></ul><p class="mt-4 text-gray-700">This is coupled with the incompressibility condition, which states that the flow is divergence-free:</p><p class="text-center my-2">$ \nabla \cdot \mathbf{u} = 0 $</p><h4 class="text-lg font-semibold text-gray-600 mb-2 mt-4">Key 2D Concepts</h4><ul class="list-disc list-inside ml-4 text-gray-700 space-y-3"><li><b>Vorticity ($\omega_z$):</b> In 2D, vorticity is a scalar value representing the local "spin" of a fluid parcel, defined as $ \omega_z = \frac{\partial v}{\partial x} - \frac{\partial u}{\partial y} $. It is a crucial quantity in 2D flows.</li><li><b>Enstrophy ($\mathcal{E}$):</b> The integral of squared vorticity, $ \mathcal{E} = \frac{1}{2} \int \omega_z^2 dA $. In 2D turbulence, there is a cascade of enstrophy from large to small scales, where it is dissipated by viscosity.</li><li><b>Inverse Energy Cascade:</b> A unique feature of 2D turbulence where kinetic energy tends to move from small scales to larger scales, leading to the formation of large, coherent vortices. This is opposite to 3D turbulence.</li></ul><h3 class="text-xl font-semibold text-gray-700 mb-2 mt-6">3. How to Analyze the Plots & Data</h3><h4 class="text-lg font-semibold text-gray-600 mb-2 mt-4">The Kinetic Energy Spectrum</h4><p class="mb-2 text-gray-700">This log-log plot is a key tool for turbulence analysis. It shows how the fluid's kinetic energy $E$ is distributed across different length scales (wavenumber $k$; small $k$ = large scales, large $k$ = small scales). Look for:</li><ul class="list-disc list-inside ml-4 text-gray-700 space-y-2"><li><b>Inverse Energy Cascade Range:</b> At low $k$, you might see a slope of $E(k) \propto k^{-5/3}$, indicating energy flowing to larger structures.</li><li><b>Enstrophy Cascade Range:</b> At high $k$, you might see a steeper slope of $E(k) \propto k^{-3}$, indicating enstrophy flowing to smaller, dissipative scales. The dashboard plots a $k^{-3}$ reference line.</li></ul>
+<h4 class="text-lg font-semibold text-gray-600 mb-2 mt-4">Vector & Scalar Field Plots</h4>
+<p class="mb-2 text-gray-700">This tab provides a powerful, interactive tool to inspect scalar fields like vorticity and divergence at a granular level. It features two synchronized views: a graphical canvas on the left and a numerical grid on the right.</p>
+<ul class="list-disc list-inside ml-4 text-gray-700 space-y-3">
+    <li><b>Interactive Hovering:</b> Move your cursor over either the graphical canvas or the numerical grid. The corresponding cell in the other view will be highlighted, and the precise value at that point will be displayed live.</li>
+    <li><b>Single-Point Detailed Analysis:</b> Click on any cell in either the canvas or the grid. This will open a modal window showing a detailed mathematical breakdown for that specific point, including the calculated gradients used to compute the field value (e.g., $\partial v/\partial x$ and $\partial u/\partial y$ for vorticity).</li>
+    <li><b>Multi-Pixel Analysis:</b> For aggregate statistics over a custom region:
+        <ol class="list-decimal list-inside ml-6 mt-2 space-y-1 text-sm">
+            <li>Check the "Enable Multi-Pixel Analysis" box.</li>
+            <li>Single-click on multiple cells in the grid to select them. Selected points will be marked with a dot.</li>
+            <li>Once you have selected your points, <strong>double-click anywhere on the grid</strong>. A tooltip will appear showing the count, mean, standard deviation, min, and max of the values for your selected points.</li>
+        </ol>
+    </li>
+</ul>
+<div id="apiKeyHelpSection"><h3 class="text-xl font-semibold text-gray-700 mb-2 mt-6">4. Acquiring a Gemini API Key</h3><p class="mb-4 text-gray-700">To enable the AI-powered interpretation features, you need a Gemini API key from Google AI Studio.</p><ol class="list-decimal list-inside ml-4 text-gray-700 space-y-2"><li>Visit <a href="https://aistudio.google.com/" target="_blank" class="text-blue-600 hover:underline">https://aistudio.google.com/</a></li><li>Sign in and click "Get API key" to create and copy your key.</li><li>Paste it into the input box in the "Simulation Metrics" panel.</li></ol></div>
+            <div id="acknowledgementsSection">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2 mt-6">5. Acknowledgements</h3>
+                <p class="mb-4 text-gray-700">This simulator was built using a combination of powerful open-source technologies. We gratefully acknowledge the creators and maintainers of these projects:</p>
+                <ul class="list-disc list-inside ml-4 text-gray-700 space-y-3">
+                    <li><b>HTML5, CSS3, & JavaScript (ES6+):</b> The fundamental technologies of the web.</li>
+                    <li><b>Tailwind CSS:</b> For rapid UI development. (<a href="https://opensource.org/licenses/MIT" target="_blank" class="text-blue-600">MIT License</a>)</li>
+                    <li><b>Chart.js:</b> For all data visualizations. (<a href="https://opensource.org/licenses/MIT" target="_blank" class="text-blue-600">MIT License</a>)</li>
+                    <li><b>MathJax:</b> For beautiful LaTeX rendering. (<a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" class="text-blue-600">Apache License 2.0</a>)</li>
+                    <li><b>Google Gemini:</b> The advanced LLM that powers the AI-driven interpretation features.</li>
+                </ul>
+            </div>
+        </div></div>
+    <div id="legalModal" class="modal"><div class="modal-content"><span class="close-button">&times;</span><h2 class="text-2xl font-bold text-gray-800 mb-4">Legal Disclaimers & Terms of Use</h2><h3 class="text-lg font-semibold text-gray-700 mb-2">1. Experimental Research Tool</h3><p class="mb-4 text-gray-700 text-sm">This 2D Fluid Dynamics Analogue Simulator (the "Tool") is provided by Quantum Q PTE. LTD. ("Quantum Q") as an experimental research and educational tool. It is not designed, certified, or intended for use in any commercial, industrial, or mission-critical applications.</p><h3 class="text-lg font-semibold text-gray-700 mb-2">2. No Warranty & Limitation of Liability</h3><p class="mb-4 text-gray-700 text-sm">THE TOOL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL QUANTUM Q BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY. The entire risk as to the quality, performance, and accuracy of the Tool is with you.</p><h3 class="text-lg font-semibold text-gray-700 mb-2">3. No Guarantee of Accuracy</h3><p class="mb-4 text-gray-700 text-sm">While efforts have been made to ensure numerical integrity, Quantum Q makes no guarantee as to the accuracy, reliability, or completeness of the results. The outputs are for illustrative and conceptual purposes only and should not be used for formal applications without independent verification.</p><h3 class="text-lg font-semibold text-gray-700 mb-2">4. Intellectual Property & Governing Law</h3><p class="mb-4 text-gray-700 text-sm">All rights are the exclusive property of Quantum Q PTE. LTD. These terms shall be governed by the laws of the Republic of Singapore.</p><p class="text-gray-600 text-xs italic mt-6">By using this Tool, you acknowledge that you have read, understood, and agree to be bound by these terms.</p></div></div>
+    <div id="aiInterpretationModal" class="modal"><div class="modal-content w-11/12 md:w-3/4 lg:w-1/2"><span class="close-button" id="closeAiInterpretationModal">&times;</span><h2 class="text-2xl font-bold text-gray-800 mb-4">✨ AI Simulation Interpretation</h2><div id="aiInterpretationContent" class="text-gray-700 prose max-w-none"><div class="flex justify-center items-center py-8"><span class="spinner w-8 h-8 !border-t-purple-500 !border-gray-200"></span><span id="aiProgressMessage" class="ml-2 text-gray-600">Generating...</span></div></div><p class="text-sm text-gray-500 mt-4 italic">(Interpretation provided by Gemini LLM. It is for conceptual understanding and does not constitute formal scientific analysis.)</p></div></div>
+    
+    <div id="mathDetailModal" class="modal">
+        <div class="modal-content w-11/12 max-w-lg">
+            <span class="close-button">&times;</span>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Detailed Analysis at Point (<span id="mathDetailCoords"></span>)</h2>
+            <div id="mathDetailContent" class="text-gray-700 prose max-w-none text-sm">
+                <!-- Content will be generated by JS -->
+            </div>
+            <p class="text-xs text-gray-500 mt-4 italic">
+                (Gradients are calculated using a second-order central difference scheme.)
+            </p>
+        </div>
+    </div>
+
+    <div id="dynamicTooltip"></div>
+    
+    <script type="importmap">{"imports": {"@google/generative-ai": "https://esm.sh/@google/generative-ai@0.14.0"}}</script>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        // ==============================================================================
+        // UTILITY: 2D FAST FOURIER TRANSFORM
+        // ==============================================================================
+        const FFT = {
+            complex: {
+                add: (a, b) => [a[0] + b[0], a[1] + b[1]],
+                sub: (a, b) => [a[0] - b[0], a[1] - b[1]],
+                mul: (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]],
+                exp: (phi) => [Math.cos(phi), Math.sin(phi)],
+                abs: (a) => Math.sqrt(a[0] * a[0] + a[1] * a[1]),
+            },
+            
+            _fft: function(x, inverse = false) {
+                const N = x.length;
+                if (N <= 1) return x;
+                const even = this._fft(x.filter((_, i) => i % 2 === 0), inverse);
+                const odd = this._fft(x.filter((_, i) => i % 2 === 1), inverse);
+                const result = new Array(N);
+                const sign = inverse ? 1 : -1;
+                for (let k = 0; k < N / 2; k++) {
+                    const t = this.complex.mul(this.complex.exp(sign * 2 * Math.PI * k / N), odd[k]);
+                    result[k] = this.complex.add(even[k], t);
+                    result[k + N / 2] = this.complex.sub(even[k], t);
+                }
+                return result;
+            },
+
+            fft2d: function(matrix, N, inverse = false) {
+                let tempMatrix = Array(N).fill(0).map(() => Array(N).fill([0,0]));
+                // FFT along rows
+                for (let j = 0; j < N; j++) {
+                    let row = [];
+                    for (let i = 0; i < N; i++) row.push(matrix[i][j]);
+                    let fftRow = this._fft(row, inverse);
+                    for (let i = 0; i < N; i++) tempMatrix[i][j] = fftRow[i];
+                }
+                // FFT along columns
+                for (let i = 0; i < N; i++) {
+                    let col = [];
+                    for (let j = 0; j < N; j++) col.push(tempMatrix[i][j]);
+                    let fftCol = this._fft(col, inverse);
+                    for (let j = 0; j < N; j++) matrix[i][j] = fftCol[j];
+                }
+                if (inverse) {
+                    const N2 = N * N;
+                    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+                        matrix[i][j][0] /= N2; matrix[i][j][1] /= N2;
+                    }
+                }
+                return matrix;
+            }
+        };
+
+        // ==============================================================================
+        // CLASS 1: THE 2D FLUID SIMULATION ENGINE
+        // ==============================================================================
+        class FluidSimulator2D {
+            constructor(N, viscosity, dt) {
+                this.N = N;
+                this.size = N + 2;
+                this.viscosity = viscosity;
+                this.dt = dt;
+                this.dx = 1.0 / N;
+                this.u = this.create2DArray(); this.v = this.create2DArray();
+                this.u_prev = this.create2DArray(); this.v_prev = this.create2DArray();
+                this.density = this.create2DArray(); this.density_prev = this.create2DArray();
+                this.p = this.create2DArray(); this.div = this.create2DArray();
+            }
+
+            create2DArray() { return Array(this.size).fill(0).map(() => new Float32Array(this.size).fill(0)); }
+
+            set_bnd(b, x) {
+                const N = this.N;
+                for (let i = 1; i <= N; i++) {
+                    x[0][i] = b == 1 ? -x[1][i] : x[1][i];
+                    x[N + 1][i] = b == 1 ? -x[N][i] : x[N][i];
+                    x[i][0] = b == 2 ? -x[i][1] : x[i][1];
+                    x[i][N + 1] = b == 2 ? -x[i][N] : x[i][N];
+                }
+                x[0][0] = 0.5 * (x[1][0] + x[0][1]);
+                x[0][N + 1] = 0.5 * (x[1][N + 1] + x[0][N]);
+                x[N + 1][0] = 0.5 * (x[N][0] + x[N + 1][1]);
+                x[N + 1][N + 1] = 0.5 * (x[N][N + 1] + x[N + 1][N]);
+            }
+            
+            lin_solve(b, x, x0, a, c) {
+                const cRecip = 1.0 / c;
+                for (let k = 0; k < 20; k++) {
+                    for (let j = 1; j <= this.N; j++) for (let i = 1; i <= this.N; i++) {
+                        x[i][j] = (x0[i][j] + a * (x[i - 1][j] + x[i + 1][j] + x[i][j - 1] + x[i][j + 1])) * cRecip;
+                    }
+                    this.set_bnd(b, x);
+                }
+            }
+
+            diffuse(b, x, x0, diff) {
+                const a = this.dt * diff * this.N * this.N;
+                this.lin_solve(b, x, x0, a, 1 + 4 * a);
+            }
+
+            advect(b, d, d0, u, v) {
+                const dt0 = this.dt * this.N;
+                for (let j = 1; j <= this.N; j++) for (let i = 1; i <= this.N; i++) {
+                    let x = i - dt0 * u[i][j]; let y = j - dt0 * v[i][j];
+                    if (x < 0.5) x = 0.5; if (x > this.N + 0.5) x = this.N + 0.5; let i0 = Math.floor(x); let i1 = i0 + 1;
+                    if (y < 0.5) y = 0.5; if (y > this.N + 0.5) y = this.N + 0.5; let j0 = Math.floor(y); let j1 = j0 + 1;
+                    let s1 = x - i0; let s0 = 1 - s1; let t1 = y - j0; let t0 = 1 - t1;
+                    d[i][j] = s0 * (t0 * d0[i0][j0] + t1 * d0[i0][j1]) + s1 * (t0 * d0[i1][j0] + t1 * d0[i1][j1]);
+                }
+                this.set_bnd(b, d);
+            }
+            
+            project() {
+                const h = 1.0 / this.N;
+                for (let j = 1; j <= this.N; j++) for (let i = 1; i <= this.N; i++) {
+                    this.div[i][j] = -0.5 * h * (this.u[i+1][j] - this.u[i-1][j] + this.v[i][j+1] - this.v[i][j-1]);
+                    this.p[i][j] = 0;
+                }
+                this.set_bnd(0, this.div); this.set_bnd(0, this.p);
+                this.lin_solve(0, this.p, this.div, 1, 4);
+                for (let j = 1; j <= this.N; j++) for (let i = 1; i <= this.N; i++) {
+                    this.u[i][j] -= 0.5 * (this.p[i+1][j] - this.p[i-1][j]) / h;
+                    this.v[i][j] -= 0.5 * (this.p[i][j+1] - this.p[i][j-1]) / h;
+                }
+                this.set_bnd(1, this.u); this.set_bnd(2, this.v);
+            }
+
+            step() {
+                [this.u_prev, this.u] = [this.u, this.u_prev]; [this.v_prev, this.v] = [this.v, this.v_prev];
+                this.diffuse(1, this.u, this.u_prev, this.viscosity);
+                this.diffuse(2, this.v, this.v_prev, this.viscosity);
+                this.project();
+                [this.u_prev, this.u] = [this.u, this.u_prev]; [this.v_prev, this.v] = [this.v, this.v_prev];
+                this.advect(1, this.u, this.u_prev, this.u_prev, this.v_prev);
+                this.advect(2, this.v, this.v_prev, this.u_prev, this.v_prev);
+                this.project();
+                [this.density_prev, this.density] = [this.density, this.density_prev];
+                this.diffuse(0, this.density, this.density_prev, 0); // No diffusion for density by default
+                [this.density_prev, this.density] = [this.density, this.density_prev];
+                this.advect(0, this.density, this.density_prev, this.u, this.v);
+            }
+        }
+
+        // ==============================================================================
+        // CLASS 2: THE INTERACTIVE DASHBOARD
+        // ==============================================================================
+        class SimulationDashboard {
+            constructor() {
+                this.simulator = null; this.animationFrameId = null;
+                this.isSimulationRunning = false; this.isSimulationPaused = false; this.isSimulationFinished = false;
+                this.currentSimStep = 0; this.totalSimSteps = 0;
+                this.visualizationMode = 'vorticity';
+                this.geminiApiKey = ""; this.tooltipsEnabled = false;
+                this.simulationSnapshots = [];
+                this.replayAnimationTimer = null;
+                this.metricsHistory = { ke: [], enstrophy: [], time: [], maxVel: [], maxVort: [], avgDiv: [] };
+                this.maxMetrics = { ke: 0, enstrophy: 0, maxVel: 0, maxVort: 0 };
+                this.charts = {};
+                this.mainGradientIsDiverging = null;
+
+                // New state for interactive field viewer
+                this.currentFieldData = { data: null, min: 0, max: 0, variable: '' };
+                this.selectedFieldPoint = { i: null, j: null, gridX: null, gridY: null };
+                this.isMultiSelectMode = false;
+                this.selectedPixels = [];
+                this.lastHighlightedCell = null;
+                this.selectedCellElement = null;
+                this.fieldGridCells = []; // <-- For performance optimization
+
+                const elementIds = [
+                    'paramN', 'inputN', 'paramViscosity', 'inputViscosity', 'paramDt', 'inputDt', 'paramSimTime', 'inputSimTime',
+                    'paramInitCondition', 'paramVisualization', 'btnRun', 'btnRunContent', 'btnPauseResume', 'btnRefresh',
+                    'btnExport', 'btnHelp', 'btnResults', 'btnInterpretKids', 'btnQA', 'btnConversation', 'navierStokesAudio',
+                    'geminiApiKeyInput', 'getApiKeyLink', 'progressBar', 'livePlotCanvas', 'interpretationModal', 'legalModal',
+                    'aiInterpretationModal', 'aiInterpretationContent', 'legalLink', 'acknowledgementsLink', 'mathDetailModal',
+                    'mathDetailCoords', 'mathDetailContent',
+                    'metricKE_current', 'metricKE_max', 'metricEnstrophy_current', 'metricEnstrophy_max', 'metricMaxVel_current',
+                    'metricMaxVel_max', 'metricMaxVort_current', 'metricMaxVort_max', 'metricAvgDiv_current', 'keChartCanvas',
+                    'enstrophyChartCanvas', 'presetKelvinHelmholtz', 'presetVortexMerging', 'presetLaminar', 'presetTurbulent',
+                    'simulationActivityIndicator', 'percentageCounter', 'liveSimSubtitle', 'legendLabelMin', 'legendLabelMax',
+                    'playbackControls', 'playbackSlider', 'playbackCurrentTime', 'playbackTotalTime', 'btnReplay', 'replayPlayIcon',
+                    'replayPauseIcon', 'enableTooltips', 'dynamicTooltip', 'mainContentArea', 'tabDistribution', 'tabSpectrum',
+                    'tabVectorFields', 'distributionContent', 'spectrumContent', 'vectorFieldsContent', 'analysisPlaceholderWrapper',
+                    'velocityDistChartCanvas', 'vorticityDistChartCanvas', 'pressureDistChartCanvas', 'energySpectrumChartCanvas',
+                    'color-gradient', 'fieldVariableSelect', 'fieldCanvas', 'fieldColorbarCanvas', 'fieldColorbarMin',
+                    'fieldColorbarMax', 'fieldGridContainer', 'fieldValueSymbol', 'fieldLiveValue', 'fieldMultiSelectCheckbox',
+                    'fieldMultiSelectActiveMessage'
+                ];
+                this.elements = Object.fromEntries(elementIds.map(id => [id, document.getElementById(id)]));
+                
+                this.elements.closeModalButtons = document.querySelectorAll('.modal .close-button');
+
+                this.parameterControls = [
+                    this.elements.paramN, this.elements.inputN, this.elements.paramViscosity, this.elements.inputViscosity,
+                    this.elements.paramDt, this.elements.inputDt, this.elements.paramSimTime, this.elements.inputSimTime,
+                    this.elements.paramInitCondition, this.elements.paramVisualization
+                ];
+                this.presetButtons = [
+                    this.elements.presetKelvinHelmholtz, this.elements.presetVortexMerging,
+                    this.elements.presetLaminar, this.elements.presetTurbulent
+                ];
+
+                this._boundHandleTooltipShow = this.handleTooltipShow.bind(this);
+                this._boundHandleTooltipHide = this.handleTooltipHide.bind(this);
+                this._boundHandleFieldHover = this.handleFieldHover.bind(this);
+                this._boundHandleFieldLeave = this.handleFieldLeave.bind(this);
+                this._boundHandleFieldClick = this.handleFieldClick.bind(this);
+                this._boundHandleFieldGridHover = this.handleFieldGridHover.bind(this);
+                this._boundHandleFieldGridLeave = this.handleFieldGridLeave.bind(this);
+                this._boundHandleFieldGridClick = this.handleFieldGridClick.bind(this);
+                this._boundHandleFieldGridDoubleClick = this.handleFieldGridDoubleClick.bind(this);
+                this.setupEventListeners();
+                this.updateAllSliderTrackColors();
+                this.initializeCharts();
+                this.updateColorGradient(true); // Default to diverging for initial vorticity view
+                this.refreshApplication();
+            }
+
+            setupEventListeners() {
+                this.setupSync('paramN', 'inputN', 0); this.setupSync('paramViscosity', 'inputViscosity', 4);
+                this.setupSync('paramDt', 'inputDt', 3); this.setupSync('paramSimTime', 'inputSimTime', 0);
+                this.elements.paramVisualization.onchange = () => { this.visualizationMode = this.elements.paramVisualization.value; this.drawCurrentState(this.isSimulationFinished ? this.simulationSnapshots.slice(-1)[0].fields : this.simulator); };
+                this.elements.btnRun.onclick = () => {
+                    if (this.isSimulationRunning) {
+                        this.finalizeSimulation();
+                    } else {
+                        this.refreshApplication();
+                        this.handleStart();
+                    }
+                };
+                this.elements.btnPauseResume.onclick = () => this.handlePauseResume();
+                this.elements.btnRefresh.onclick = () => this.refreshApplication(); this.elements.btnExport.onclick = () => this.exportData();
+                this.elements.btnHelp.onclick = () => this.showModal('interpretationModal');
+                this.elements.legalLink.onclick = (e) => { e.preventDefault(); this.showModal('legalModal'); };
+                this.elements.acknowledgementsLink.onclick = (e) => { e.preventDefault(); this.showModal('interpretationModal', 'acknowledgementsSection'); };
+                this.elements.getApiKeyLink.onclick = (e) => { e.preventDefault(); this.showModal('interpretationModal', 'apiKeyHelpSection'); };
+                this.elements.closeModalButtons.forEach(btn => btn.onclick = () => this.hideAllModals());
+                window.onclick = (e) => { if (e.target.classList.contains('modal')) this.hideAllModals(); };
+                this.elements.presetKelvinHelmholtz.onclick = () => this.applyPreset({ N: 128, viscosity: 0.0001, dt: 0.04, simTime: 800, init: 'shear', viz: 'vorticity' });
+                this.elements.presetVortexMerging.onclick = () => this.applyPreset({ N: 128, viscosity: 0.0005, dt: 0.04, simTime: 1000, init: 'vortex_pair', viz: 'vorticity' });
+                this.elements.presetLaminar.onclick = () => this.applyPreset({ N: 64, viscosity: 0.01, dt: 0.02, simTime: 500, init: 'jet', viz: 'density' });
+                this.elements.presetTurbulent.onclick = () => this.applyPreset({ N: 256, viscosity: 0.0001, dt: 0.04, simTime: 1500, init: 'random', viz: 'vorticity' });
+                this.elements.btnResults.onclick = () => this.interpretSimulationState('expert');
+                this.elements.btnInterpretKids.onclick = () => this.interpretSimulationState('kids');
+                this.elements.btnQA.onclick = () => this.interpretSimulationState('qa');
+                this.elements.btnConversation.onclick = () => this.playConversationAudio();
+                this.elements.geminiApiKeyInput.oninput = () => this.validateAndSetApiKey();
+                this.elements.playbackSlider.oninput = () => this.handlePlaybackScrub();
+                this.elements.btnReplay.onclick = () => this.toggleReplayAnimation();
+                this.elements.enableTooltips.onchange = (e) => { this.tooltipsEnabled = e.target.checked; if(!this.tooltipsEnabled) this.handleTooltipHide(); };
+                this.elements.mainContentArea.addEventListener('mouseover', this._boundHandleTooltipShow);
+                this.elements.mainContentArea.addEventListener('mouseout', this._boundHandleTooltipHide);
+                this.elements.mainContentArea.addEventListener('mousemove', this._boundHandleTooltipShow);
+                ['tabDistribution', 'tabSpectrum', 'tabVectorFields'].forEach(id => this.elements[id].onclick = (e) => this.switchTab(e.currentTarget));
+                
+                // Event Listeners for new Vector Field viewer
+                this.elements.fieldVariableSelect.onchange = () => this.drawCurrentField(this.isSimulationFinished ? this.simulationSnapshots.slice(-1)[0].fields : this.simulator);
+                this.elements.fieldMultiSelectCheckbox.onchange = (e) => this.toggleMultiSelectMode(e.target.checked);
+                this.elements.fieldCanvas.addEventListener('mousemove', this._boundHandleFieldHover);
+                this.elements.fieldCanvas.addEventListener('mouseleave', this._boundHandleFieldLeave);
+                this.elements.fieldCanvas.addEventListener('click', this._boundHandleFieldClick);
+                this.elements.fieldGridContainer.addEventListener('mousemove', this._boundHandleFieldGridHover);
+                this.elements.fieldGridContainer.addEventListener('mouseleave', this._boundHandleFieldGridLeave);
+                this.elements.fieldGridContainer.addEventListener('click', this._boundHandleFieldGridClick);
+                this.elements.fieldGridContainer.addEventListener('dblclick', this._boundHandleFieldGridDoubleClick);
+            }
+
+            setupSync(sliderId, inputId, fixedPoints = 0) {
+                const slider = this.elements[sliderId]; const input = this.elements[inputId];
+                const updateInput = () => { input.value = parseFloat(slider.value).toFixed(fixedPoints); this.updateSliderTrackColor(slider); };
+                const updateSlider = () => { let value = parseFloat(input.value); const min = parseFloat(slider.min); const max = parseFloat(slider.max); if (isNaN(value)) value = min; value = Math.max(min, Math.min(max, value)); slider.value = value; input.value = value.toFixed(fixedPoints); this.updateSliderTrackColor(slider); };
+                slider.oninput = updateInput; input.onchange = updateSlider;
+            }
+
+            updateSliderTrackColor(slider) { if (!slider) return; const percentage = ((slider.value - slider.min) / (slider.max - slider.min)) * 100; slider.style.setProperty('--slider-value-percent', `${percentage}%`); }
+            updateAllSliderTrackColors() { ['paramN', 'paramViscosity', 'paramDt', 'paramSimTime', 'playbackSlider'].forEach(id => this.updateSliderTrackColor(this.elements[id])); }
+            
+            updateColorGradient(isDiverging = false, elementId = 'color-gradient') {
+                const element = this.elements[elementId];
+                if (!element) return;
+            
+                if (element.tagName === 'CANVAS') {
+                    // Draw on canvas for vector field viewer
+                    const ctx = element.getContext('2d');
+                    const width = element.width;
+                    const height = element.height;
+                    ctx.clearRect(0, 0, width, height);
+                    const colorFunc = isDiverging ? this.divergingColor : this.spectralColor;
+            
+                    for (let i = 0; i < width; i++) {
+                        const t = i / (width - 1);
+                        const [r, g, b] = colorFunc.call(this, t);
+                        ctx.fillStyle = `rgb(${r},${g},${b})`;
+                        ctx.fillRect(i, 0, 1, height);
+                    }
+                } else { // Assuming DIV
+                    // Optimization for the main simulation color bar
+                    if (elementId === 'color-gradient') {
+                        if (this.mainGradientIsDiverging === isDiverging) return;
+                        this.mainGradientIsDiverging = isDiverging;
+                    }
+            
+                    let gradient = 'linear-gradient(to right';
+                    const colorFunc = isDiverging ? this.divergingColor : this.spectralColor;
+                    for (let i = 0; i <= 100; i++) {
+                        const [r,g,b] = colorFunc.call(this, i/100);
+                        gradient += `, rgb(${r},${g},${b}) ${i}%`;
+                    }
+                    gradient += ')';
+                    element.style.background = gradient;
+                }
+            }
+
+            applyPreset(config) {
+                if (this.isSimulationRunning) this.finalizeSimulation();
+                this.elements.inputN.value = config.N; this.elements.paramN.value = config.N;
+                this.elements.inputViscosity.value = config.viscosity.toFixed(4); this.elements.paramViscosity.value = config.viscosity;
+                this.elements.inputDt.value = config.dt.toFixed(3); this.elements.paramDt.value = config.dt;
+                this.elements.inputSimTime.value = config.simTime; this.elements.paramSimTime.value = config.simTime;
+                this.elements.paramInitCondition.value = config.init;
+                this.elements.paramVisualization.value = config.viz;
+                this.visualizationMode = config.viz;
+                this.updateAllSliderTrackColors();
+                this.refreshApplication();
+                setTimeout(() => this.handleStart(), 100);
+            }
+
+            refreshApplication() {
+                if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+                if (this.replayAnimationTimer) this.toggleReplayAnimation();
+                this.isSimulationRunning = false; this.isSimulationPaused = false; this.isSimulationFinished = false;
+                this.currentSimStep = 0; this.simulationSnapshots = [];
+                this.elements.progressBar.style.width = '0%';
+                this.toggleMultiSelectMode(false);
+                this.elements.fieldMultiSelectCheckbox.checked = false;
+                
+                const N = parseInt(this.elements.paramN.value);
+                const viscosity = parseFloat(this.elements.paramViscosity.value);
+                const dt = parseFloat(this.elements.paramDt.value);
+                this.totalSimSteps = parseInt(this.elements.paramSimTime.value);
+                this.simulator = new FluidSimulator2D(N, viscosity, dt);
+                this.setupFieldGrid(N);
+                
+                const initType = this.elements.paramInitCondition.value;
+                const center_i = Math.floor(N / 2), center_j = Math.floor(N / 2);
+                if (initType === 'shear') {
+                    for (let j = 1; j <= N; j++) for (let i = 1; i <= N; i++) {
+                        this.simulator.u[i][j] = (j > center_j) ? 1 : -1;
+                        this.simulator.u[i][j] += 0.05 * Math.sin(i / (N/ (2*Math.PI*4) ));
+                        this.simulator.density[i][j] = (j > center_j) ? 1 : 0;
+                    }
+                } else if (initType === 'vortex_pair') {
+                    const placeVortex = (cx, cy, strength) => {
+                        for (let j=1; j<=N; j++) for (let i=1; i<=N; i++) {
+                            const dx = (i - cx); const dy = (j - cy); const r2 = dx*dx + dy*dy;
+                            if (r2 > 0) { const f = strength * Math.exp(-r2 / (0.02*N*N)); this.simulator.u[i][j] -= f * dy; this.simulator.v[i][j] += f * dx; }
+                        }
+                    };
+                    placeVortex(center_i - N/4, center_j, 1);
+                    placeVortex(center_i + N/4, center_j, 1);
+                } else if (initType === 'jet') {
+                    for (let j = center_j - Math.floor(N/16); j <= center_j + Math.floor(N/16); j++) for (let i = 1; i <= N/4; i++) {
+                        this.simulator.u[i][j] = 5.0; this.simulator.density[i][j] = 1.0;
+                    }
+                } else if (initType === 'random') {
+                    for (let j = 1; j <= N; j++) for (let i = 1; i <= N; i++) {
+                        this.simulator.u[i][j] = (Math.random() - 0.5) * 2;
+                        this.simulator.v[i][j] = (Math.random() - 0.5) * 2;
+                    }
+                }
+                
+                this.elements.playbackSlider.value = 0;
+                this.elements.playbackSlider.max = this.totalSimSteps;
+                this.elements.playbackCurrentTime.textContent = `Step: 0`;
+                this.elements.playbackTotalTime.textContent = `Total: ${this.totalSimSteps}`;
+
+                this.resetMetrics();
+                this.drawCurrentState();
+                this.updateButtonStates();
+                this.elements.analysisPlaceholderWrapper.style.display = 'none';
+                this.elements.analysisPlaceholderWrapper.classList.remove('active');
+                // Ensure distribution tab is the default view with empty charts
+                this.switchTab(this.elements.tabDistribution);
+            }
+
+            handleStart() {
+                this.isSimulationRunning = true;
+                this.isSimulationPaused = false;
+                this.elements.analysisPlaceholderWrapper.style.display = 'none';
+                this.elements.analysisPlaceholderWrapper.classList.remove('active');
+                // Ensure the distribution tab is active, so it starts updating.
+                this.switchTab(this.elements.tabDistribution);
+                this.runSimulationLoop();
+                this.updateButtonStates();
+            }
+
+            runSimulationLoop() {
+                if (this.isSimulationPaused || !this.isSimulationRunning) { if (this.isSimulationRunning) this.animationFrameId = requestAnimationFrame(() => this.runSimulationLoop()); return; }
+                if (this.currentSimStep >= this.totalSimSteps) { this.finalizeSimulation(); return; }
+                
+                this.simulator.step();
+                this.currentSimStep++;
+
+                if (this.currentSimStep % Math.max(1, Math.floor(this.totalSimSteps / 100)) === 0 || this.currentSimStep === this.totalSimSteps) {
+                    const deepCopy = (arr) => arr.map(row => new Float32Array(row));
+                    this.simulationSnapshots.push({ step: this.currentSimStep, fields: { u: deepCopy(this.simulator.u), v: deepCopy(this.simulator.v), p: deepCopy(this.simulator.p), density: deepCopy(this.simulator.density) } });
+                }
+
+                if (this.currentSimStep % 5 === 0) {
+                    this.updateMetrics();
+                    // Live update for detailed analysis tabs
+                    if (this.elements.distributionContent.classList.contains('active')) {
+                        this.renderDistributionCharts(this.simulator);
+                    }
+                    if (this.elements.vectorFieldsContent.classList.contains('active')) {
+                        this.drawCurrentField(this.simulator);
+                    }
+                }
+                
+                // FFT for energy spectrum is expensive, run less frequently.
+                if (this.currentSimStep > 0 && (this.currentSimStep % 25 === 0 || this.currentSimStep === this.totalSimSteps)) {
+                    if (this.elements.spectrumContent.classList.contains('active')) {
+                        this.renderEnergySpectrum(this.simulator);
+                    }
+                }
+                
+                if (this.currentSimStep % 2 === 0) { this.drawCurrentState(); }
+                
+                const progress = (this.currentSimStep / this.totalSimSteps) * 100;
+                this.elements.progressBar.style.width = `${progress}%`; this.elements.percentageCounter.textContent = `${Math.round(progress)}%`;
+                this.animationFrameId = requestAnimationFrame(() => this.runSimulationLoop());
+            }
+
+            drawCurrentState(source = this.simulator) {
+                if (!source) return;
+                const canvas = this.elements.livePlotCanvas; const ctx = canvas.getContext('2d');
+                const N = this.simulator.N;
+                canvas.width = N; canvas.height = N;
+                
+                let field, isDiverging = false;
+                switch (this.visualizationMode) {
+                    case 'vorticity': field = this.calculateVorticity(source); isDiverging = true; break;
+                    case 'pressure': field = source.p; isDiverging = true; break;
+                    case 'density': default: field = source.density; break;
+                }
+
+                this.updateColorGradient(isDiverging);
+
+                let minVal = field[1][1], maxVal = field[1][1];
+                for (let j = 1; j <= N; j++) for (let i = 1; i <= N; i++) {
+                    if (field[i][j] < minVal) minVal = field[i][j];
+                    if (field[i][j] > maxVal) maxVal = field[i][j];
+                }
+
+                if (isDiverging) {
+                    const absMax = Math.max(Math.abs(minVal), Math.abs(maxVal));
+                    minVal = -absMax; maxVal = absMax;
+                }
+                this.elements.legendLabelMin.textContent = `${minVal.toExponential(1)}`;
+                this.elements.legendLabelMax.textContent = `${maxVal.toExponential(1)}`;
+                
+                const imageData = ctx.createImageData(N, N);
+                const range = maxVal - minVal;
+                const colorFunc = isDiverging ? this.divergingColor : this.spectralColor;
+
+                for (let j = 1; j <= N; j++) for (let i = 1; i <= N; i++) {
+                    const normalized = range > 1e-9 ? (field[i][j] - minVal) / range : 0.5;
+                    const [r,g,b] = colorFunc.call(this, normalized);
+                    const idx = ((j - 1) * N + (i - 1)) * 4;
+                    imageData.data[idx] = r; imageData.data[idx+1] = g; imageData.data[idx+2] = b; imageData.data[idx+3] = 255;
+                }
+                ctx.putImageData(imageData, 0, 0);
+            }
+            
+            spectralColor(t) {
+                const viridis = [[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],[31,158,137],[53,183,121],[109,205,89],[180,222,44],[253,231,37]];
+                t=Math.max(0,Math.min(1,t)); const i=Math.floor(t*(viridis.length-1)), j=Math.min(i+1,viridis.length-1), f=t*(viridis.length-1)-i;
+                return [Math.round(viridis[i][0]+(viridis[j][0]-viridis[i][0])*f), Math.round(viridis[i][1]+(viridis[j][1]-viridis[i][1])*f), Math.round(viridis[i][2]+(viridis[j][2]-viridis[i][2])*f)];
+            }
+            
+            divergingColor(t) {
+                t=Math.max(0,Math.min(1,t)); let r,g,b;
+                if(t<0.5){ const nt=t*2; r=30+nt*(245-30); g=144+nt*(245-144); b=255; }
+                else{ const nt=(t-0.5)*2; r=255; g=245-nt*(245-0); b=245-nt*(245-66); }
+                return [Math.round(r),Math.round(g),Math.round(b)];
+            }
+
+            handlePauseResume() { if (this.isSimulationRunning) { this.isSimulationPaused = !this.isSimulationPaused; this.updateButtonStates(); } }
+            finalizeSimulation() { this.isSimulationRunning = false; this.isSimulationFinished = true; if(this.replayAnimationTimer) this.toggleReplayAnimation(); this.updateButtonStates(); this.showAnalysis(); }
+            
+            resetMetrics() { 
+                this.metricsHistory = { ke: [], enstrophy: [], time: [], maxVel: [], maxVort: [], avgDiv: [] };
+                this.maxMetrics = { ke: 0, enstrophy: 0, maxVel: 0, maxVort: 0 }; 
+                ['metricKE_current','metricKE_max','metricEnstrophy_current','metricEnstrophy_max'].forEach(id => this.elements[id].textContent = '0.0000');
+                ['metricMaxVel_current','metricMaxVel_max','metricMaxVort_current','metricMaxVort_max'].forEach(id => this.elements[id].textContent = '0.000');
+                this.elements.metricAvgDiv_current.textContent = '0.0000';
+                this.initializeCharts(); 
+            }
+
+            updateMetrics(source = this.simulator) {
+                const N = this.simulator.N; let ke = 0, enstrophy = 0, maxVelSq = 0;
+                const vorticity = this.calculateVorticity(source); let maxVortAbs = 0;
+                for (let j=1; j<=N; j++) for (let i=1; i<=N; i++) {
+                    const u = source.u[i][j], v = source.v[i][j];
+                    const velSq = u*u + v*v;
+                    ke += velSq;
+                    maxVelSq = Math.max(maxVelSq, velSq);
+                    const vort = vorticity[i][j];
+                    enstrophy += vort*vort;
+                    maxVortAbs = Math.max(maxVortAbs, Math.abs(vort));
+                }
+                ke /= (2 * N * N); enstrophy /= (2 * N * N);
+                const maxVel = Math.sqrt(maxVelSq);
+                const avgDiv = this.calculateDivergence(source, true);
+
+                this.maxMetrics.ke = Math.max(this.maxMetrics.ke, ke);
+                this.maxMetrics.enstrophy = Math.max(this.maxMetrics.enstrophy, enstrophy);
+                this.maxMetrics.maxVel = Math.max(this.maxMetrics.maxVel, maxVel);
+                this.maxMetrics.maxVort = Math.max(this.maxMetrics.maxVort, maxVortAbs);
+                
+                this.metricsHistory.ke.push(ke);
+                this.metricsHistory.enstrophy.push(enstrophy);
+                this.metricsHistory.maxVel.push(maxVel);
+                this.metricsHistory.maxVort.push(maxVortAbs);
+                this.metricsHistory.avgDiv.push(avgDiv);
+                this.metricsHistory.time.push(this.currentSimStep);
+
+                this.elements.metricKE_current.textContent = ke.toExponential(2); this.elements.metricKE_max.textContent = this.maxMetrics.ke.toExponential(2);
+                this.elements.metricEnstrophy_current.textContent = enstrophy.toExponential(2); this.elements.metricEnstrophy_max.textContent = this.maxMetrics.enstrophy.toExponential(2);
+                this.elements.metricMaxVel_current.textContent = maxVel.toExponential(2); this.elements.metricMaxVel_max.textContent = this.maxMetrics.maxVel.toExponential(2);
+                this.elements.metricMaxVort_current.textContent = maxVortAbs.toExponential(2); this.elements.metricMaxVort_max.textContent = this.maxMetrics.maxVort.toExponential(2);
+                this.elements.metricAvgDiv_current.textContent = avgDiv.toExponential(2);
+                
+                this.charts.ke.data.labels = this.metricsHistory.time; this.charts.ke.data.datasets[0].data = this.metricsHistory.ke; this.charts.ke.update('none');
+                this.charts.enstrophy.data.labels = this.metricsHistory.time; this.charts.enstrophy.data.datasets[0].data = this.metricsHistory.enstrophy; this.charts.enstrophy.update('none');
+            }
+            
+            calculateVorticity(source) { const N = this.simulator.N, h2 = 2*this.simulator.dx; const vort = this.simulator.create2DArray(); for (let j=1; j<=N; j++) for (let i=1; i<=N; i++) { vort[i][j] = ((source.v[i+1][j] - source.v[i-1][j]) - (source.u[i][j+1] - source.u[i][j-1]))/h2; } return vort; }
+            calculateDivergence(source, avg = false) { const N = this.simulator.N, h2 = 2*this.simulator.dx; const div = this.simulator.create2DArray(); let totalDiv = 0; for (let j=1; j<=N; j++) for (let i=1; i<=N; i++) { div[i][j] = ((source.u[i+1][j] - source.u[i-1][j]) + (source.v[i][j+1] - source.v[i][j-1]))/h2; if(avg) totalDiv += Math.abs(div[i][j]); } return avg ? totalDiv/(N*N) : div; }
+            
+            showAnalysis() { 
+                if (!this.isSimulationFinished) return; 
+                this.elements.analysisPlaceholderWrapper.style.display = 'none'; 
+                this.elements.analysisPlaceholderWrapper.classList.remove('active'); 
+                const activeTab = document.querySelector('.tab-button.active-tab') || this.elements.tabDistribution;
+                this.switchTab(activeTab); 
+            }
+
+            switchTab(tabElement) {
+                const targetId = tabElement.dataset.tab;
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = 'none';
+                    content.classList.remove('active');
+                });
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.remove('active-tab');
+                    btn.classList.add('inactive-tab');
+                });
+                this.elements[targetId].style.display = 'block';
+                this.elements[targetId].classList.add('active');
+                tabElement.classList.add('active-tab');
+                tabElement.classList.remove('inactive-tab');
+                
+                // Determine which data source to use: final snapshot or live simulator
+                const sourceData = this.isSimulationFinished ? this.simulationSnapshots.slice(-1)[0]?.fields : this.simulator;
+
+                // Render the content for the switched-to tab if data is available
+                if (sourceData && (this.isSimulationFinished || this.isSimulationRunning || this.isSimulationPaused)) {
+                    if (targetId === 'distributionContent') {
+                        this.renderDistributionCharts(sourceData);
+                    } else if (targetId === 'spectrumContent') {
+                        this.renderEnergySpectrum(sourceData);
+                    } else if (targetId === 'vectorFieldsContent') {
+                        this.drawCurrentField(sourceData);
+                    }
+                }
+            }
+
+            renderDistributionCharts(state) {
+                if (!state) return;
+                const N = this.simulator.N; const velMag = [], vort = [], pres = [];
+                const vorticityField = this.calculateVorticity(state);
+                for (let j=1; j<=N; j++) for (let i=1; i<=N; i++) { velMag.push(Math.sqrt(state.u[i][j]**2 + state.v[i][j]**2)); vort.push(vorticityField[i][j]); pres.push(state.p[i][j]); }
+                const getDist = (data) => { let min=data[0], max=data[0]; data.forEach(v => {if(v<min)min=v; if(v>max)max=v;}); const bins=30, w=(max-min)/bins, h=new Array(bins).fill(0), l=Array.from({length:bins},(_,i)=>(min+i*w).toExponential(1)); data.forEach(v=>{let b=Math.floor((v-min)/w); b=Math.min(bins-1,Math.max(0,b)); h[b]++;}); return {l,h}; };
+                [{c:'velocityDistChart',d:velMag}, {c:'vorticityDistChart',d:vort}, {c:'pressureDistChart',d:pres}].forEach(item => { const data = getDist(item.d); this.charts[item.c].data.labels=data.l; this.charts[item.c].data.datasets[0].data=data.h; this.charts[item.c].update('none'); });
+            }
+            renderEnergySpectrum(state) {
+                if (!state) return;
+                const N = this.simulator.N; const fft_N = 2 ** Math.ceil(Math.log2(N));
+                const pad = (field) => { let m = Array(fft_N).fill(0).map(()=>Array(fft_N).fill([0,0])); for(let j=0; j<N; j++) for(let i=0; i<N; i++) m[i][j] = [field[i+1][j+1], 0]; return m; };
+                const u_fft = FFT.fft2d(pad(state.u), fft_N); const v_fft = FFT.fft2d(pad(state.v), fft_N);
+                const max_k = Math.floor(Math.sqrt(2) * (fft_N/2)); let energy=new Array(max_k+1).fill(0), counts=new Array(max_k+1).fill(0);
+                for(let j=0; j<fft_N; j++) for(let i=0; i<fft_N; i++){
+                    const kx=i<fft_N/2?i:i-fft_N, ky=j<fft_N/2?j:j-fft_N;
+                    const k_bin = Math.round(Math.sqrt(kx*kx + ky*ky));
+                    if(k_bin > 0 && k_bin <= max_k){ energy[k_bin] += 0.5 * (FFT.complex.abs(u_fft[i][j])**2 + FFT.complex.abs(v_fft[i][j])**2); counts[k_bin]++; }
+                }
+                const data = [], ref = [], ref53 = [];
+                const k_ref_idx = Math.floor(max_k / 4);
+                const e_ref = (counts[k_ref_idx] > 0) ? energy[k_ref_idx]/counts[k_ref_idx] : 1e-6;
+                const c3 = e_ref / (k_ref_idx**-3);
+                const c53 = e_ref / (k_ref_idx**-1.667);
+                for(let k=1; k<=max_k; k++) { if(counts[k]>0) data.push({x:k, y:energy[k]/counts[k]}); ref.push({x:k, y:c3*(k**-3)}); ref53.push({x:k, y:c53*(k**-1.667)}); }
+                this.charts.energySpectrum.data.datasets[0].data = data; this.charts.energySpectrum.data.datasets[1].data = ref; this.charts.energySpectrum.data.datasets[2].data = ref53; this.charts.energySpectrum.update('none');
+            }
+
+            setupFieldGrid(N) {
+                const gridContainer = this.elements.fieldGridContainer;
+                gridContainer.innerHTML = ''; // Clear previous grid
+                gridContainer.style.setProperty('--field-grid-n', N);
+                this.fieldGridCells = Array(N).fill(0).map(() => Array(N).fill(null));
+                const fragment = document.createDocumentFragment();
+                for (let y = 0; y < N; y++) {
+                    for (let x = 0; x < N; x++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'field-grid-cell';
+                        cell.id = `field-cell-${x}-${y}`;
+                        cell.dataset.x = x;
+                        cell.dataset.y = y;
+                        this.fieldGridCells[x][y] = cell;
+                        fragment.appendChild(cell);
+                    }
+                }
+                gridContainer.appendChild(fragment);
+            }
+            
+            drawCurrentField(sourceData) {
+                if (!sourceData) return;
+                const canvas = this.elements.fieldCanvas;
+                const ctx = canvas.getContext('2d');
+                const N = this.simulator.N;
+                canvas.width = N;
+                canvas.height = N;
+                ctx.clearRect(0, 0, N, N);
+
+                const variable = this.elements.fieldVariableSelect.value;
+                const fieldData = (variable === 'vorticity') ? this.calculateVorticity(sourceData) : this.calculateDivergence(sourceData);
+
+                let minVal = Infinity, maxVal = -Infinity;
+                for (let j = 1; j <= N; j++) for (let i = 1; i <= N; i++) {
+                    const val = fieldData[i][j];
+                    if (val < minVal) minVal = val;
+                    if (val > maxVal) maxVal = val;
+                }
+
+                const absMax = Math.max(Math.abs(minVal), Math.abs(maxVal));
+                minVal = -absMax; maxVal = absMax;
+
+                this.currentFieldData = { data: fieldData, min: minVal, max: maxVal, variable };
+                this.updateColorGradient(true, 'fieldColorbarCanvas');
+                
+                const imageData = ctx.createImageData(N, N);
+                const range = maxVal - minVal;
+                for (let y = 0; y < N; y++) {
+                    for (let x = 0; x < N; x++) {
+                        const normalized = range > 1e-9 ? (fieldData[x + 1][y + 1] - minVal) / range : 0.5;
+                        const [r, g, b] = this.divergingColor(normalized);
+                        const index = (y * N + x) * 4;
+                        imageData.data[index] = r; imageData.data[index+1] = g; imageData.data[index+2] = b; imageData.data[index+3] = 255;
+                        
+                        const cell = this.fieldGridCells[x][y];
+                        if (cell) {
+                            cell.style.backgroundColor = `rgba(${r},${g},${b}, 0.5)`;
+                        }
+                    }
+                }
+                ctx.putImageData(imageData, 0, 0);
+
+                this.elements.fieldColorbarMin.textContent = minVal.toExponential(2);
+                this.elements.fieldColorbarMax.textContent = maxVal.toExponential(2);
+                
+                this.reapplyCellSelections();
+            }
+
+            updateFieldHighlight(gridX, gridY) {
+                if (this.lastHighlightedCell) { this.lastHighlightedCell.classList.remove('field-grid-cell-highlight'); }
+                if (gridX === null) { this.lastHighlightedCell = null; return; }
+                const cell = this.fieldGridCells[gridX]?.[gridY];
+                if (cell) { cell.classList.add('field-grid-cell-highlight'); this.lastHighlightedCell = cell; }
+            }
+
+            handleFieldHover(e) { const rect = e.target.getBoundingClientRect(); const N = this.simulator.N; const x = Math.floor((e.clientX - rect.left) / e.target.clientWidth * N); const y = Math.floor((e.clientY - rect.top) / e.target.clientHeight * N); this.updateFieldHighlight(x, y); this.updateLiveValueDisplay(x, y); }
+            handleFieldLeave() { this.updateFieldHighlight(null); this.updateLiveValueDisplay(null, null); }
+            handleFieldGridHover(e) { const cell = e.target.closest('.field-grid-cell'); if(!cell) {this.updateFieldHighlight(null);this.updateLiveValueDisplay(null,null);return;} const x = parseInt(cell.dataset.x, 10), y = parseInt(cell.dataset.y, 10); this.updateFieldHighlight(x, y); this.updateLiveValueDisplay(x, y); }
+            handleFieldGridLeave() { this.updateFieldHighlight(null); this.updateLiveValueDisplay(null, null); }
+            handleFieldClick(e) { if(this.isMultiSelectMode) return; const rect = e.target.getBoundingClientRect(); const N = this.simulator.N; const x = Math.floor((e.clientX - rect.left) / e.target.clientWidth * N); const y = Math.floor((e.clientY - rect.top) / e.target.clientHeight * N); this.selectFieldCell(x,y); }
+            handleFieldGridClick(e) { const cell = e.target.closest('.field-grid-cell'); if (!cell) return; const x = parseInt(cell.dataset.x, 10), y = parseInt(cell.dataset.y, 10); if (this.isMultiSelectMode) { this.toggleMultiPixelSelection(x, y); } else { this.selectFieldCell(x, y); } }
+            handleFieldGridDoubleClick(e) { if (!this.isMultiSelectMode || this.selectedPixels.length === 0) return; const values = this.selectedPixels.map(p => this.currentFieldData.data[p.x+1][p.y+1]); const count = values.length, sum = values.reduce((a, b) => a + b, 0), mean = sum/count, min = Math.min(...values), max = Math.max(...values), stdDev = Math.sqrt(values.map(v=>Math.pow(v-mean,2)).reduce((a,b)=>a+b,0)/count); const tooltip = this.elements.dynamicTooltip; tooltip.innerHTML = `<div class="font-bold text-center mb-2 border-b pb-1">Multi-Pixel Analysis</div><div class="tooltip-grid"><span class="tooltip-grid-label">Count:</span> <span>${count}</span><span class="tooltip-grid-label">Mean:</span> <span>${mean.toExponential(3)}</span><span class="tooltip-grid-label">Std Dev:</span> <span>${stdDev.toExponential(3)}</span><span class="tooltip-grid-label">Min:</span> <span>${min.toExponential(3)}</span><span class="tooltip-grid-label">Max:</span> <span>${max.toExponential(3)}</span></div>`; tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; tooltip.classList.add('show');}
+
+            updateLiveValueDisplay(gridX, gridY) {
+                const { fieldLiveValue, fieldValueSymbol } = this.elements;
+                const value = this.currentFieldData?.data?.[gridX + 1]?.[gridY + 1];
+                if (typeof value !== 'number' || !isFinite(value)) { fieldLiveValue.textContent = "N/A"; return; }
+                const symbols = { vorticity: '\\omega_z', divergence: '\\nabla \\cdot \\mathbf{u}'};
+                fieldValueSymbol.textContent = `$${symbols[this.currentFieldData.variable] || ''}$`;
+                fieldLiveValue.textContent = value.toExponential(3);
+                if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise([fieldValueSymbol]);
+            }
+
+            selectFieldCell(gridX, gridY) {
+                if (this.selectedCellElement) this.selectedCellElement.classList.remove('field-grid-cell-selected');
+                this.selectedCellElement = this.fieldGridCells[gridX]?.[gridY];
+                if (this.selectedCellElement) this.selectedCellElement.classList.add('field-grid-cell-selected');
+                this.selectedFieldPoint = { i: gridX + 1, j: gridY + 1 };
+                this.showFieldMathDetails();
+            }
+            
+            showFieldMathDetails() {
+                if (!this.selectedFieldPoint.i || (!this.isSimulationFinished && !this.isSimulationRunning)) return;
+                const { i, j } = this.selectedFieldPoint;
+                const sourceState = this.isSimulationFinished ? this.simulationSnapshots.slice(-1)[0].fields : this.simulator;
+                const h2 = 2 * this.simulator.dx;
+                const f = (num) => num.toExponential(3);
+                this.elements.mathDetailCoords.textContent = `${i-1}, ${j-1}`;
+                
+                const du_dx = (sourceState.u[i+1][j] - sourceState.u[i-1][j]) / h2;
+                const du_dy = (sourceState.u[i][j+1] - sourceState.u[i][j-1]) / h2;
+                const dv_dx = (sourceState.v[i+1][j] - sourceState.v[i-1][j]) / h2;
+                const dv_dy = (sourceState.v[i][j+1] - sourceState.v[i][j-1]) / h2;
+                
+                const varType = this.currentFieldData.variable;
+                let title, val, p1, p2, p1_val, p2_val;
+                if (varType === 'vorticity') {
+                    title = 'Vorticity: $\\omega_z = \\frac{\\partial v}{\\partial x} - \\frac{\\partial u}{\\partial y}$';
+                    val = dv_dx - du_dy; p1 = '$\\frac{\\partial v}{\\partial x}$'; p2 = '$\\frac{\\partial u}{\\partial y}$'; p1_val = dv_dx; p2_val = du_dy;
+                } else {
+                    title = 'Divergence: $\\nabla \\cdot \\mathbf{u} = \\frac{\\partial u}{\\partial x} + \\frac{\\partial v}{\\partial y}$';
+                    val = du_dx + dv_dy; p1 = '$\\frac{\\partial u}{\\partial x}$'; p2 = '$\\frac{\\partial v}{\\partial y}$'; p1_val = du_dx; p2_val = dv_dy;
+                }
+                
+                const content = `<div class="bg-gray-100 p-3 rounded-md border"><h4 class="font-bold text-gray-700 mb-2 text-center">${title}</h4><p class="text-center text-lg font-mono">${f(val)}</p><hr class="my-2"><div class="grid grid-cols-2 gap-2 text-center"><p>${p1}</p><p>${p2}</p><p class="font-mono">${f(p1_val)}</p><p class="font-mono">${f(p2_val)}</p></div></div>`;
+                this.elements.mathDetailContent.innerHTML = content;
+                this.showModal('mathDetailModal');
+            }
+
+            toggleMultiSelectMode(isActive) {
+                this.isMultiSelectMode = isActive;
+                this.elements.fieldMultiSelectActiveMessage.style.display = isActive ? 'block' : 'none';
+                this.selectedPixels = [];
+                this.reapplyCellSelections();
+            }
+            
+            toggleMultiPixelSelection(x, y) {
+                const index = this.selectedPixels.findIndex(p => p.x === x && p.y === y);
+                const cell = this.fieldGridCells[x]?.[y];
+                if (index > -1) {
+                    this.selectedPixels.splice(index, 1);
+                    cell?.classList.remove('field-grid-cell-multiselected');
+                } else {
+                    this.selectedPixels.push({x, y});
+                    cell?.classList.add('field-grid-cell-multiselected');
+                }
+            }
+
+            reapplyCellSelections() {
+                document.querySelectorAll('.field-grid-cell').forEach(c => { c.classList.remove('field-grid-cell-selected'); c.classList.remove('field-grid-cell-multiselected'); });
+                if (this.isMultiSelectMode) {
+                    this.selectedPixels.forEach(p => { 
+                        const cell = this.fieldGridCells[p.x]?.[p.y];
+                        if (cell) cell.classList.add('field-grid-cell-multiselected');
+                    });
+                } else if (this.selectedCellElement) {
+                    this.selectedCellElement.classList.add('field-grid-cell-selected');
+                }
+            }
+
+            initializeCharts() {
+                Object.values(this.charts).forEach(chart => chart?.destroy());
+                const chartConfig = (type, label, xLabel, yLabel, yType = 'linear', color) => ({ type, data:{labels:[], datasets:[{label,borderWidth:2, backgroundColor: color, borderColor: color, pointRadius: 0, tension: 0.1}]}, options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:xLabel}},y:{type:yType,title:{display:true,text:yLabel}}},plugins:{legend:{display:false},title:{display:true,text:label}}}});
+                this.charts.ke = new Chart(this.elements.keChartCanvas, chartConfig('line', 'Kinetic Energy', 'Step', 'Energy', 'linear', '#4F46E5'));
+                this.charts.enstrophy = new Chart(this.elements.enstrophyChartCanvas, chartConfig('line', 'Enstrophy', 'Step', 'Enstrophy', 'linear', '#EF4444'));
+                this.charts.velocityDistChart = new Chart(this.elements.velocityDistChartCanvas, chartConfig('bar', 'Velocity Magnitude', 'Value Bins', 'Frequency', 'linear', 'rgba(79, 70, 229, 0.6)'));
+                this.charts.vorticityDistChart = new Chart(this.elements.vorticityDistChartCanvas, chartConfig('bar', 'Vorticity', 'Value Bins', 'Frequency', 'linear', 'rgba(239, 68, 68, 0.6)'));
+                this.charts.pressureDistChart = new Chart(this.elements.pressureDistChartCanvas, chartConfig('bar', 'Pressure', 'Value Bins', 'Frequency', 'linear', 'rgba(16, 185, 129, 0.6)'));
+                this.charts.energySpectrum = new Chart(this.elements.energySpectrumChartCanvas, {type:'scatter', data:{datasets:[{label:'Energy Spectrum',pointRadius:2, backgroundColor: '#4F46E5'},{label:'k^-3',type:'line',borderWidth:2,pointRadius:0,fill:false, borderColor:'#EF4444'},{label:'k^-5/3',type:'line',borderWidth:2,pointRadius:0,fill:false, borderColor:'#10B981', borderDash:[5,5]}]}, options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'logarithmic',title:{display:true,text:'Wavenumber k'}},y:{type:'logarithmic',title:{display:true,text:'Energy E(k)'}}}}});
+            }
+            
+            async interpretSimulationState(mode) {
+                if (!this.geminiApiKey) { this.showAiInterpretationModal(`<p class="text-red-600">Please enter your Gemini API key.</p>`); return; }
+                if (!this.isSimulationFinished) { this.showAiInterpretationModal(`<p>Please run a simulation to generate data first.</p>`); return; }
+                this.showAiInterpretationModal(); 
+                
+                const finalMetrics = this.metricsHistory;
+                const lastKE = finalMetrics.ke.length > 0 ? finalMetrics.ke.slice(-1)[0] : 0;
+                const lastEnstrophy = finalMetrics.enstrophy.length > 0 ? finalMetrics.enstrophy.slice(-1)[0] : 0;
+
+                const prompt = mode === 'expert' ? `You are a fluid dynamics expert. Analyze a 2D incompressible fluid simulation. Params: N=${this.simulator.N}, Viscosity=${this.simulator.viscosity}. Initial condition: ${this.elements.paramInitCondition.value}. Final metrics: KE=${lastKE.toExponential(2)}, Enstrophy=${lastEnstrophy.toExponential(2)}. Discuss the observed phenomena (vortex merging, instabilities, turbulence cascade) based on these values. Use Markdown and LaTeX.`
+                    : mode === 'kids' ? `You're a friendly scientist explaining a "super-swirly liquid" experiment to a 10-year-old. My liquid has a "stickiness" of ${this.simulator.viscosity}. I started it by creating a '${this.elements.paramInitCondition.value}'. The liquid's "splash energy" is ${lastKE.toExponential(2)} and its "total swirliness" is ${lastEnstrophy.toExponential(2)}. Tell me a fun story about what the swirls are doing!`
+                    : `Generate 5 insightful questions and detailed answers about a 2D fluid simulation. Focus on the relationship between parameters (viscosity, initial conditions) and outcomes (vortex dynamics, energy/enstrophy cascades, turbulence). Data: N=${this.simulator.N}, Viscosity=${this.simulator.viscosity}, Final KE=${lastKE.toExponential(2)}, Final Enstrophy=${lastEnstrophy.toExponential(2)}. Format as a JSON array of objects, with 'question' and 'answer' keys.`;
+
+                try {
+                    const genAI = new GoogleGenerativeAI(this.geminiApiKey);
+                    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+                    let result;
+                    let text;
+                    const isJson = (mode === 'qa');
+
+                    if (isJson) {
+                         const generationConfig = { responseMimeType: "application/json" };
+                         result = await model.generateContent({
+                            contents: [{ role: "user", parts: [{ text: prompt }] }],
+                            generationConfig,
+                         });
+                         const response = await result.response;
+                         text = response.text();
+                    } else {
+                        result = await model.generateContent(prompt);
+                        const response = await result.response;
+                        text = response.text();
+                    }
+
+                    let htmlContent = '';
+                    if (isJson) {
+                        if (text.startsWith("```json")) {
+                           text = text.substring(7, text.length - 3).trim();
+                        } else if (text.startsWith("```")) {
+                           text = text.substring(3, text.length - 3).trim();
+                        }
+                        const qaPairs = JSON.parse(text);
+                        htmlContent = qaPairs.map((item, index) => {
+                           return `<div class="mb-4 p-3 border border-gray-200 rounded-md bg-gray-50"><h4 class="font-bold text-lg text-gray-800 mb-1">Q${index+1}: ${item.question}</h4><p class="text-gray-700">${item.answer.replace(/\n/g, '<br>')}</p></div>`;
+                        }).join('');
+                    } else {
+                        htmlContent = text.replace(/\n/g, '<br>');
+                    }
+                    
+                    this.showAiInterpretationModal(htmlContent);
+
+                    if (window.MathJax?.typesetPromise) {
+                        window.MathJax.typesetPromise([this.elements.aiInterpretationContent]);
+                    }
+                } catch (e) {
+                    this.showAiInterpretationModal(`<p class="text-red-600">Error: ${e.message}. Check your API key and network connection.</p>`);
+                }
+            }
+            
+            showAiInterpretationModal(content = '') { this.showModal('aiInterpretationModal'); this.elements.aiInterpretationContent.innerHTML = content || `<div class="flex justify-center items-center py-8"><span class="spinner w-8 h-8 !border-t-purple-500 !border-gray-200"></span><span class="ml-2 text-gray-600">Generating...</span></div>`; }
+            showModal(id, sectionId = null) { const modal = this.elements[id.replace(/Modal$/,'')+'Modal']; modal.style.display = 'flex'; if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise([modal]); if (sectionId) document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' }); }
+            hideAllModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+            validateAndSetApiKey() { this.geminiApiKey = this.elements.geminiApiKeyInput.value.trim(); this.updateButtonStates(); }
+            playConversationAudio() { const audio = this.elements.navierStokesAudio, btn = this.elements.btnConversation; if(audio.paused) {audio.play();btn.textContent='Pause Conversation';} else {audio.pause();btn.textContent='Conversation';} audio.onended=()=>btn.textContent='Conversation'; }
+            
+            updateButtonStates() {
+                const setButtonState = (btn, enabled) => {
+                    if (btn) {
+                        btn.disabled = !enabled;
+                        btn.classList.toggle('opacity-50', !enabled);
+                        btn.classList.toggle('cursor-not-allowed', !enabled);
+                    }
+                };
+                const setGroupState = (controls, enabled) => controls.forEach(control => setButtonState(control, enabled));
+            
+                const isRunning = this.isSimulationRunning && !this.isSimulationFinished;
+                const isFinished = this.isSimulationFinished;
+                const isReady = !isRunning && !isFinished;
+                const canInterpret = isFinished && this.geminiApiKey.length > 0;
+            
+                setGroupState(this.parameterControls, isReady);
+                setGroupState(this.presetButtons, isReady);
+                setButtonState(this.elements.btnRun, isReady || isRunning);
+                setButtonState(this.elements.btnPauseResume, isRunning);
+                setButtonState(this.elements.btnRefresh, isReady || isFinished);
+                setButtonState(this.elements.btnExport, isFinished);
+                setButtonState(this.elements.btnResults, canInterpret);
+                setButtonState(this.elements.btnInterpretKids, canInterpret);
+                setButtonState(this.elements.btnQA, canInterpret);
+
+                const hasSnapshots = this.simulationSnapshots.length > 0;
+                this.elements.playbackControls.classList.toggle('playback-disabled', !isFinished || !hasSnapshots);
+                this.elements.playbackSlider.disabled = !isFinished || !hasSnapshots;
+                setButtonState(this.elements.btnReplay, isFinished && hasSnapshots);
+                if (!isFinished && this.replayAnimationTimer) this.toggleReplayAnimation();
+
+                if (isRunning) {
+                    this.elements.btnRunContent.innerHTML = `<svg class="inline-block w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg> Stop`;
+                    this.elements.btnRun.title = 'Stop Simulation';
+                } else {
+                    this.elements.btnRunContent.innerHTML = `<svg class="inline-block w-5 h-5 mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197 2.132A1 1 0 0110 13.82V9.18a1 1 0 011.555-.832l3.197 2.132a1 1 0 010 1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Simulation`;
+                    this.elements.btnRun.title = 'Start Simulation';
+                }
+                this.elements.btnRun.classList.toggle('bg-red-600', isRunning); this.elements.btnRun.classList.toggle('hover:bg-red-700', isRunning);
+                this.elements.btnRun.classList.toggle('bg-indigo-600', !isRunning); this.elements.btnRun.classList.toggle('hover:bg-indigo-700', !isRunning);
+
+                if (this.isSimulationPaused) {
+                    this.elements.btnPauseResume.innerHTML = `<svg class="inline-block w-5 h-5 mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168L10 9.18v5.64l4.752-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Resume`;
+                    this.elements.btnPauseResume.title = 'Resume Simulation';
+                } else {
+                    this.elements.btnPauseResume.innerHTML = `<svg class="inline-block w-5 h-5 mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Pause`;
+                    this.elements.btnPauseResume.title = 'Pause Simulation';
+                }
+
+                this.elements.liveSimSubtitle.innerHTML = isFinished ? '<span class="text-blue-500">COMPLETED</span>' : isRunning ? '<span class="text-green-600-custom">ACTIVE</span>' : '<span class="text-red-500">INACTIVE</span>';
+                this.elements.simulationActivityIndicator.style.display = isRunning && !this.isSimulationPaused ? 'flex' : 'none';
+                this.elements.btnRunContent.classList.toggle('pulsing-text', isRunning && !this.isSimulationPaused);
+             }
+
+            async handleTooltipShow(event) { if (!this.tooltipsEnabled) return; const host = event.target.closest('[data-tooltip-content]'); if (!host) return; const tooltip = this.elements.dynamicTooltip; tooltip.innerHTML = host.dataset.tooltipContent; if (window.MathJax?.typesetPromise) await window.MathJax.typesetPromise([tooltip]); const r=host.getBoundingClientRect(), tw=tooltip.offsetWidth, th=tooltip.offsetHeight; let l=window.scrollX+r.left+(r.width/2)-(tw/2),t=window.scrollY+r.top-th-5; if(l<window.scrollX+5)l=window.scrollX+5; if((l+tw)>window.scrollX+window.innerWidth-5)l=window.scrollX+window.innerWidth-tw-5; if(t<window.scrollY+5)t=window.scrollY+r.bottom+5; tooltip.style.left=`${l}px`; tooltip.style.top=`${t}px`; tooltip.classList.add('show'); }
+            handleTooltipHide() { this.elements.dynamicTooltip.classList.remove('show'); }
+            toggleReplayAnimation() { if(this.replayAnimationTimer){clearInterval(this.replayAnimationTimer);this.replayAnimationTimer=null;this.elements.replayPlayIcon.classList.remove('hidden');this.elements.replayPauseIcon.classList.add('hidden');}else{const s=this.elements.playbackSlider;if(parseInt(s.value)>=parseInt(s.max))s.value=0;this.elements.replayPlayIcon.classList.add('hidden');this.elements.replayPauseIcon.classList.remove('hidden');this.replayAnimationTimer=setInterval(()=>this.stepPlayback(),50);} }
+            stepPlayback() { const s=this.elements.playbackSlider; let v=parseInt(s.value), max=parseInt(s.max); const step=Math.max(1,Math.floor(this.totalSimSteps/100)); v+=step; if(v>=max)v=0; s.value=v; this.handlePlaybackScrub(); }
+            
+            handlePlaybackScrub() {
+                if (!this.simulationSnapshots.length) return;
+                const step = parseInt(this.elements.playbackSlider.value);
+                this.elements.playbackCurrentTime.textContent = `Step: ${step}`;
+                
+                // Update visualization
+                const visualSnap = this.simulationSnapshots.reduce((p, c) => Math.abs(c.step - step) < Math.abs(p.step - step) ? c : p);
+                this.drawCurrentState(visualSnap.fields);
+
+                // Update metrics display
+                if (!this.metricsHistory.time.length) return;
+                const metricsIndex = this.metricsHistory.time.reduce((prev, curr, i) => Math.abs(curr - step) < Math.abs(this.metricsHistory.time[prev] - step) ? i : prev, 0);
+
+                this.elements.metricKE_current.textContent = this.metricsHistory.ke[metricsIndex].toExponential(2);
+                this.elements.metricEnstrophy_current.textContent = this.metricsHistory.enstrophy[metricsIndex].toExponential(2);
+                this.elements.metricMaxVel_current.textContent = this.metricsHistory.maxVel[metricsIndex].toExponential(2);
+                this.elements.metricMaxVort_current.textContent = this.metricsHistory.maxVort[metricsIndex].toExponential(2);
+                this.elements.metricAvgDiv_current.textContent = this.metricsHistory.avgDiv[metricsIndex].toExponential(2);
+            }
+
+            exportData() { if(!this.isSimulationFinished) return; const data={params:{N:this.simulator.N,viscosity:this.simulator.viscosity,dt:this.simulator.dt},metrics:this.metricsHistory, finalState: this.simulationSnapshots.slice(-1)[0].fields}; const blob=new Blob([JSON.stringify(data, (k,v) => v instanceof Float32Array ? Array.from(v) : v ,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`fluid2d_sim_N${this.simulator.N}_${this.elements.paramInitCondition.value}.json`; a.click(); URL.revokeObjectURL(a.href); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { new SimulationDashboard(); });
+    </script>
+</body>
+</html>
