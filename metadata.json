@@ -1,0 +1,6 @@
+{
+  "name": "v1.0 2D Fluid Dynamics Analogue Simulator (Working)",
+  "description": "An interactive 2D fluid dynamics simulator for conceptual exploration of phenomena like vortex dynamics and turbulence, with AI-powered analysis features.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
